@@ -4,12 +4,12 @@ export default function StatusBar() {
       <div className="flex items-center space-x-4">
         <span>UTF-8</span>
         <span>LF</span>
-        <span>JavaScript</span>
+        <span>PingVim</span>
       </div>
 
       <div className="flex items-center space-x-4">
-        <span>Ln 1, Col 1</span>
-        <span>Spaces: 2</span>
+        <span>Demo</span>
+        <span>Version: v7</span>
       </div>
     </div>
   )
