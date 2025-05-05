@@ -63,6 +63,13 @@ export default function Editor({ content, onChange, showLineNumbers = false, fon
     if (lineNumbersElement) {
       lineNumbersElement.scrollTop = textareaRef.current.scrollTop
     }
+
+    // Синхронизируем прокрутку pre с textarea
+    const preElement = document.getElementById("syntax-highlight")
+    if (preElement && textareaRef.current) {
+      preElement.scrollTop = textareaRef.current.scrollTop
+      preElement.scrollLeft = textareaRef.current.scrollLeft
+    }
   }
 
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -83,12 +90,75 @@ export default function Editor({ content, onChange, showLineNumbers = false, fon
     const numbers = []
     for (let i = 1; i <= lineCount; i++) {
       numbers.push(
-        <div key={i} className="leading-6" style={{ fontSize: `${fontSize}px` }}>
+        <div
+          key={i}
+          style={{
+            fontSize: `${fontSize}px`,
+            height: "24px",
+            lineHeight: "24px",
+          }}
+        >
           {i}
         </div>,
       )
     }
     return numbers
+  }
+
+  // Format content with colors
+  const formatContentWithColors = () => {
+    if (!content) return ""
+
+    // Разбиваем текст на строки
+    const lines = content.split("\n")
+    const formattedLines = []
+    let inTripleQuotes = false
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i]
+
+      // Проверяем, есть ли в строке открывающие или закрывающие тройные кавычки
+      const hasTripleQuotes = line.includes('"""')
+
+      // Если в строке есть тройные кавычки, меняем состояние
+      if (hasTripleQuotes) {
+        // Подсчитываем количество тройных кавычек в строке
+        const matches = line.match(/"""/g) || []
+        const count = matches.length
+
+        // Если нечетное количество, меняем состояние
+        if (count % 2 !== 0) {
+          inTripleQuotes = !inTripleQuotes
+        }
+
+        // Всегда делаем строку с тройными кавычками зеленой
+        formattedLines.push(`<span style="color: #4CAF50;">${escapeHtml(line)}</span>`)
+      }
+      // Если строка начинается с #, делаем текст желтым
+      else if (line.trim().startsWith("#")) {
+        formattedLines.push(`<span style="color: #FFEB3B;">${escapeHtml(line)}</span>`)
+      }
+      // Если мы внутри блока с тройными кавычками, делаем текст зеленым
+      else if (inTripleQuotes) {
+        formattedLines.push(`<span style="color: #4CAF50;">${escapeHtml(line)}</span>`)
+      }
+      // Обычный текст
+      else {
+        formattedLines.push(escapeHtml(line))
+      }
+    }
+
+    return formattedLines.join("\n")
+  }
+
+  // Экранирование HTML-символов
+  const escapeHtml = (text: string) => {
+    return text
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;")
   }
 
   // Add scroll event listener
@@ -107,16 +177,17 @@ export default function Editor({ content, onChange, showLineNumbers = false, fon
       {showLineNumbers && (
         <div
           id="line-numbers"
-          className="py-4 pr-2 pl-4 text-right bg-[#313335] text-gray-500 select-none font-mono overflow-hidden"
+          className="py-4 pr-2 pl-2 text-right bg-[#313335] text-gray-500 select-none font-mono overflow-hidden"
           style={{
             position: "absolute",
             top: 0,
             left: 0,
             bottom: 0,
-            width: "50px",
+            width: "30px",
             zIndex: 10,
             pointerEvents: "none",
             fontSize: `${fontSize}px`,
+            lineHeight: "24px",
           }}
         >
           {renderLineNumbers()}
@@ -124,23 +195,35 @@ export default function Editor({ content, onChange, showLineNumbers = false, fon
       )}
       <div className="flex-1 relative">
         <pre
-          className="absolute top-0 left-0 right-0 bottom-0 p-4 font-mono text-transparent whitespace-pre-wrap break-all overflow-hidden"
+          id="syntax-highlight"
+          className="absolute top-0 left-0 right-0 bottom-0 font-mono whitespace-pre-wrap break-all overflow-auto"
           style={{
-            paddingLeft: showLineNumbers ? "60px" : "24px", // Increased left padding
+            paddingLeft: showLineNumbers ? "40px" : "24px",
+            paddingTop: "16px", // Отступ сверху для выравнивания с номерами строк
+            paddingRight: "24px",
+            paddingBottom: "16px",
             fontSize: `${fontSize}px`,
+            color: "#e6e6e6",
+            margin: 0,
+            border: "none",
+            lineHeight: "24px", // Фиксированная высота строки
           }}
-        >
-          {content + " "} {/* Space to ensure cursor visibility at the end */}
-        </pre>
+          dangerouslySetInnerHTML={{ __html: formatContentWithColors() + " " }}
+        />
         <textarea
           ref={textareaRef}
           value={content}
           onChange={handleChange}
           onScroll={handleScroll}
-          className="absolute top-0 left-0 right-0 bottom-0 w-full h-full bg-transparent outline-none resize-none font-mono text-gray-300 p-4 leading-6 z-20"
+          className="absolute top-0 left-0 right-0 bottom-0 w-full h-full bg-transparent outline-none resize-none font-mono text-transparent caret-white"
           style={{
-            paddingLeft: showLineNumbers ? "60px" : "24px", // Increased left padding
+            paddingLeft: showLineNumbers ? "40px" : "24px",
+            paddingTop: "16px", // Отступ сверху для выравнивания с номерами строк
+            paddingRight: "24px",
+            paddingBottom: "16px",
             fontSize: `${fontSize}px`,
+            lineHeight: "24px", // Фиксированная высота строки
+            caretColor: "white",
           }}
           spellCheck={false}
         />
