@@ -2,13 +2,30 @@
 
 import type React from "react"
 import { useState, useEffect, useRef } from "react"
-import { X, MoreVertical, Settings, Menu, Search, User, SplitSquareVertical, File } from "lucide-react"
+import {
+  X,
+  MoreVertical,
+  Settings,
+  Menu,
+  Search,
+  User,
+  SplitSquareVertical,
+  File,
+  Folder,
+  ChevronRight,
+  ChevronDown,
+  Plus,
+  Trash,
+  Edit,
+} from "lucide-react"
 import { useLocalStorage } from "@/hooks/use-local-storage"
-import FileExplorer from "@/components/file-explorer"
 import Editor from "@/components/editor"
 import StatusBar from "@/components/status-bar"
 import SettingsMenu from "@/components/settings-menu"
 import type { FileType, FolderType } from "@/types/file-system"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 
 export default function Home() {
   // Track open files for left pane
@@ -33,6 +50,26 @@ export default function Home() {
   // Track search state
   const [searchTerm, setSearchTerm] = useState("")
   const [searchResults, setSearchResults] = useState<FileType[]>([])
+
+  // Dialog states
+  const [newItemDialogOpen, setNewItemDialogOpen] = useState(false)
+  const [newItemType, setNewItemType] = useState<"file" | "folder">("file")
+  const [newItemName, setNewItemName] = useState("")
+  const [newItemParentId, setNewItemParentId] = useState<string | null>(null)
+
+  const [renameDialogOpen, setRenameDialogOpen] = useState(false)
+  const [itemToRename, setItemToRename] = useState<{
+    id: string
+    type: "file" | "folder"
+    name: string
+  } | null>(null)
+  const [newName, setNewName] = useState("")
+
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
+  const [itemToDelete, setItemToDelete] = useState<{
+    id: string
+    type: "file" | "folder"
+  } | null>(null)
 
   const [fileSystem, setFileSystem] = useLocalStorage<{
     folders: FolderType[]
@@ -179,84 +216,159 @@ export default function Home() {
     }))
   }
 
-  const handleCreateFile = (name: string, parentId: string) => {
-    const newFile = {
-      id: Date.now().toString(),
-      name,
-      content: "",
-      parentId,
-    }
-
-    setFileSystem((prev) => ({
-      ...prev,
-      files: [...prev.files, newFile],
-    }))
+  // File operations
+  const openNewFileDialog = (parentId: string) => {
+    setNewItemType("file")
+    setNewItemName("")
+    setNewItemParentId(parentId)
+    setNewItemDialogOpen(true)
   }
 
-  const handleCreateFolder = (name: string, parentId: string) => {
-    const newFolder = {
-      id: Date.now().toString(),
-      name,
-      isOpen: false,
-      parentId,
-    }
-
-    setFileSystem((prev) => ({
-      ...prev,
-      folders: [...prev.folders, newFolder],
-    }))
+  const openNewFolderDialog = (parentId: string) => {
+    setNewItemType("folder")
+    setNewItemName("")
+    setNewItemParentId(parentId)
+    setNewItemDialogOpen(true)
   }
 
-  const handleDeleteFile = (fileId: string) => {
-    // Close the file if it's open in either pane
-    if (leftPaneFiles.includes(fileId)) {
-      handleCloseFile("left", fileId)
-    }
-    if (rightPaneFiles.includes(fileId)) {
-      handleCloseFile("right", fileId)
-    }
+  const openRenameDialog = (type: "file" | "folder", id: string) => {
+    const item =
+      type === "file" ? fileSystem.files.find((f) => f.id === id) : fileSystem.folders.find((f) => f.id === id)
 
-    setFileSystem((prev) => ({
-      ...prev,
-      files: prev.files.filter((file) => file.id !== fileId),
-    }))
+    if (item) {
+      setItemToRename({
+        id,
+        type,
+        name: item.name,
+      })
+      setNewName(item.name)
+      setRenameDialogOpen(true)
+    }
   }
 
-  const handleDeleteFolder = (folderId: string) => {
-    // Delete folder and all its contents recursively
-    const foldersToDelete = [folderId]
-    const filesToDelete: string[] = []
+  const openDeleteDialog = (type: "file" | "folder", id: string) => {
+    setItemToDelete({
+      id,
+      type,
+    })
+    setDeleteConfirmOpen(true)
+  }
 
-    // Find all subfolders
-    const checkFolders = [folderId]
-    while (checkFolders.length > 0) {
-      const currentFolderId = checkFolders.shift()!
-      const childFolders = fileSystem.folders.filter((f) => f.parentId === currentFolderId)
+  const createNewItem = () => {
+    if (!newItemName.trim() || !newItemParentId) {
+      setNewItemDialogOpen(false)
+      return
+    }
 
-      childFolders.forEach((folder) => {
-        foldersToDelete.push(folder.id)
-        checkFolders.push(folder.id)
+    if (newItemType === "file") {
+      const newFile = {
+        id: Date.now().toString(),
+        name: newItemName,
+        content: "",
+        parentId: newItemParentId,
+      }
+
+      setFileSystem((prev) => ({
+        ...prev,
+        files: [...prev.files, newFile],
+      }))
+    } else {
+      const newFolder = {
+        id: Date.now().toString(),
+        name: newItemName,
+        isOpen: false,
+        parentId: newItemParentId,
+      }
+
+      setFileSystem((prev) => ({
+        ...prev,
+        folders: [...prev.folders, newFolder],
+      }))
+    }
+
+    setNewItemDialogOpen(false)
+  }
+
+  const renameItem = () => {
+    if (!itemToRename || !newName.trim()) {
+      setRenameDialogOpen(false)
+      return
+    }
+
+    if (itemToRename.type === "file") {
+      setFileSystem((prev) => ({
+        ...prev,
+        files: prev.files.map((file) => (file.id === itemToRename.id ? { ...file, name: newName } : file)),
+      }))
+    } else {
+      setFileSystem((prev) => ({
+        ...prev,
+        folders: prev.folders.map((folder) => (folder.id === itemToRename.id ? { ...folder, name: newName } : folder)),
+      }))
+    }
+
+    setRenameDialogOpen(false)
+    setItemToRename(null)
+  }
+
+  const deleteItem = () => {
+    if (!itemToDelete) {
+      setDeleteConfirmOpen(false)
+      return
+    }
+
+    if (itemToDelete.type === "file") {
+      // Close the file if it's open in either pane
+      if (leftPaneFiles.includes(itemToDelete.id)) {
+        handleCloseFile("left", itemToDelete.id)
+      }
+      if (rightPaneFiles.includes(itemToDelete.id)) {
+        handleCloseFile("right", itemToDelete.id)
+      }
+
+      setFileSystem((prev) => ({
+        ...prev,
+        files: prev.files.filter((file) => file.id !== itemToDelete.id),
+      }))
+    } else {
+      // Delete folder and all its contents recursively
+      const foldersToDelete = [itemToDelete.id]
+      const filesToDelete: string[] = []
+
+      // Find all subfolders
+      const checkFolders = [itemToDelete.id]
+      while (checkFolders.length > 0) {
+        const currentFolderId = checkFolders.shift()!
+        const childFolders = fileSystem.folders.filter((f) => f.parentId === currentFolderId)
+
+        childFolders.forEach((folder) => {
+          foldersToDelete.push(folder.id)
+          checkFolders.push(folder.id)
+        })
+
+        // Find all files in this folder
+        const childFiles = fileSystem.files.filter((f) => f.parentId === currentFolderId)
+        filesToDelete.push(...childFiles.map((f) => f.id))
+      }
+
+      // Close any open files that are being deleted
+      filesToDelete.forEach((fileId) => {
+        if (leftPaneFiles.includes(fileId)) {
+          handleCloseFile("left", fileId)
+        }
+        if (rightPaneFiles.includes(fileId)) {
+          handleCloseFile("right", fileId)
+        }
       })
 
-      // Find all files in this folder
-      const childFiles = fileSystem.files.filter((f) => f.parentId === currentFolderId)
-      filesToDelete.push(...childFiles.map((f) => f.id))
+      setFileSystem((prev) => ({
+        folders: prev.folders.filter((folder) => !foldersToDelete.includes(folder.id)),
+        files: prev.files.filter((file) => !filesToDelete.includes(file.id)),
+      }))
     }
 
-    // Close any open files that are being deleted
-    filesToDelete.forEach((fileId) => {
-      if (leftPaneFiles.includes(fileId)) {
-        handleCloseFile("left", fileId)
-      }
-      if (rightPaneFiles.includes(fileId)) {
-        handleCloseFile("right", fileId)
-      }
-    })
-
-    setFileSystem((prev) => ({
-      folders: prev.folders.filter((folder) => !foldersToDelete.includes(folder.id)),
-      files: prev.files.filter((file) => !filesToDelete.includes(file.id)),
-    }))
+    setDeleteConfirmOpen(false)
+    setItemToDelete(null)
   }
 
   const toggleFolderOpen = (folderId: string) => {
@@ -264,10 +376,6 @@ export default function Home() {
       ...prev,
       folders: prev.folders.map((folder) => (folder.id === folderId ? { ...folder, isOpen: !folder.isOpen } : folder)),
     }))
-  }
-
-  const toggleSplitView = () => {
-    setSplitView((prev) => !prev)
   }
 
   // Toggle settings menu
@@ -378,17 +486,200 @@ export default function Home() {
     )
   }
 
-  const onFileClick = (fileId: string) => {
-    handleFileClick(fileId)
+  // Render file explorer
+  const renderFileExplorer = () => {
+    const renderFolder = (folder: FolderType) => {
+      const childFolders = fileSystem.folders.filter((f) => f.parentId === folder.id)
+      const childFiles = fileSystem.files.filter((f) => f.parentId === folder.id)
+
+      return (
+        <div key={folder.id} className="select-none">
+          <div className="flex items-center py-1 px-2 hover:bg-[#4b6eaf] cursor-pointer group">
+            <div className="flex-grow flex items-center" onClick={() => toggleFolderOpen(folder.id)}>
+              {folder.isOpen ? (
+                <ChevronDown className="h-4 w-4 mr-1 flex-shrink-0" />
+              ) : (
+                <ChevronRight className="h-4 w-4 mr-1 flex-shrink-0" />
+              )}
+
+              <Folder className="h-4 w-4 mr-1 text-yellow-500 flex-shrink-0" />
+              <span className="text-sm truncate">{folder.name}</span>
+            </div>
+
+            <div className="ml-auto hidden group-hover:flex">
+              <button
+                className="p-1 hover:bg-gray-600"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  openNewFileDialog(folder.id)
+                }}
+                title="New File"
+              >
+                <Plus className="h-3 w-3" />
+              </button>
+              <button
+                className="p-1 hover:bg-gray-600"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  openRenameDialog("folder", folder.id)
+                }}
+                title="Rename"
+              >
+                <Edit className="h-3 w-3" />
+              </button>
+              <button
+                className="p-1 hover:bg-gray-600"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  openDeleteDialog("folder", folder.id)
+                }}
+                title="Delete"
+              >
+                <Trash className="h-3 w-3" />
+              </button>
+            </div>
+          </div>
+
+          {folder.isOpen && (
+            <div className="pl-4">
+              {childFolders.map(renderFolder)}
+              {childFiles.map((file) => (
+                <div
+                  key={file.id}
+                  className={`flex items-center py-1 px-2 hover:bg-[#4b6eaf] cursor-pointer group ${
+                    leftActiveFile === file.id || rightActiveFile === file.id ? "bg-[#4b6eaf]" : ""
+                  }`}
+                >
+                  <div className="flex-grow flex items-center" onClick={() => handleFileClick(file.id)}>
+                    <File className="h-4 w-4 mr-1 text-gray-400 flex-shrink-0" />
+                    <span className="text-sm truncate">{file.name}</span>
+                  </div>
+
+                  <div className="ml-auto hidden group-hover:flex items-center">
+                    <button
+                      className="p-1 hover:bg-gray-600"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleSplitView(file.id)
+                      }}
+                      title="Open in Split View"
+                    >
+                      <SplitSquareVertical className="h-3 w-3" />
+                    </button>
+                    <button
+                      className="p-1 hover:bg-gray-600"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        openRenameDialog("file", file.id)
+                      }}
+                      title="Rename"
+                    >
+                      <Edit className="h-3 w-3" />
+                    </button>
+                    <button
+                      className="p-1 hover:bg-gray-600"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        openDeleteDialog("file", file.id)
+                      }}
+                      title="Delete"
+                    >
+                      <Trash className="h-3 w-3" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )
+    }
+
+    // Get root folders (those with parentId === null)
+    const rootFolders = fileSystem.folders.filter((folder) => folder.parentId === null)
+
+    return (
+      <div className="p-2">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-sm font-medium">Project</span>
+          <div className="flex space-x-1">
+            <button
+              className="p-1 hover:bg-gray-600 rounded"
+              onClick={() => openNewFolderDialog(rootFolders[0]?.id || "")}
+              title="New Folder"
+            >
+              <Folder className="h-3 w-3" />
+            </button>
+            <button
+              className="p-1 hover:bg-gray-600 rounded"
+              onClick={() => openNewFileDialog(rootFolders[0]?.id || "")}
+              title="New File"
+            >
+              <File className="h-3 w-3" />
+            </button>
+          </div>
+        </div>
+        {rootFolders.map(renderFolder)}
+      </div>
+    )
   }
 
-  const onSplitView = (fileId: string) => {
-    handleSplitView(fileId)
-  }
+  // Render search results
+  const renderSearchResults = () => {
+    return (
+      <div className="p-2">
+        {searchResults.length > 0 ? (
+          searchResults.map((file) => (
+            <div
+              key={file.id}
+              className={`flex items-center py-1 px-2 hover:bg-[#4b6eaf] cursor-pointer group ${
+                leftActiveFile === file.id || rightActiveFile === file.id ? "bg-[#4b6eaf]" : ""
+              }`}
+            >
+              <div className="flex-grow flex items-center" onClick={() => handleFileClick(file.id)}>
+                <File className="h-4 w-4 mr-1 text-gray-400 flex-shrink-0" />
+                <span className="text-sm truncate">{file.name}</span>
+              </div>
 
-  const handleContextMenu = (event: React.MouseEvent, type: "file" | "folder", id: string) => {
-    event.preventDefault()
-    console.log(`Context menu for ${type} with id ${id}`)
+              <div className="ml-auto hidden group-hover:flex items-center">
+                <button
+                  className="p-1 hover:bg-gray-600"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleSplitView(file.id)
+                  }}
+                  title="Open in Split View"
+                >
+                  <SplitSquareVertical className="h-3 w-3" />
+                </button>
+                <button
+                  className="p-1 hover:bg-gray-600"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    openRenameDialog("file", file.id)
+                  }}
+                  title="Rename"
+                >
+                  <Edit className="h-3 w-3" />
+                </button>
+                <button
+                  className="p-1 hover:bg-gray-600"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    openDeleteDialog("file", file.id)
+                  }}
+                  title="Delete"
+                >
+                  <Trash className="h-3 w-3" />
+                </button>
+              </div>
+            </div>
+          ))
+        ) : (
+          <div className="text-gray-500 text-sm p-2">No files found</div>
+        )}
+      </div>
+    )
   }
 
   return (
@@ -459,62 +750,7 @@ export default function Home() {
           </div>
 
           <div className="flex-1 overflow-auto">
-            {searchTerm.trim() !== "" ? (
-              <div className="p-2">
-                {searchResults.length > 0 ? (
-                  searchResults.map((file) => (
-                    <div
-                      key={file.id}
-                      className={`flex items-center py-1 px-2 hover:bg-[#4b6eaf] cursor-pointer ${
-                        leftActiveFile === file.id || rightActiveFile === file.id ? "bg-[#4b6eaf]" : ""
-                      }`}
-                      onClick={() => onFileClick(file.id)}
-                    >
-                      <File className="h-4 w-4 mr-1 text-gray-400 flex-shrink-0" />
-                      <span className="text-sm truncate">{file.name}</span>
-
-                      <div className="ml-auto flex items-center">
-                        <button
-                          className="p-1 hover:bg-gray-600"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            onSplitView(file.id)
-                          }}
-                          title="Open in Split View"
-                        >
-                          <SplitSquareVertical className="h-3 w-3" />
-                        </button>
-                        <button
-                          className="p-1 hover:bg-gray-600"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            const rect = e.currentTarget.getBoundingClientRect()
-                            handleContextMenu(e, "file", file.id)
-                          }}
-                        >
-                          <MoreVertical className="h-3 w-3" />
-                        </button>
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="text-gray-500 text-sm p-2">No files found</div>
-                )}
-              </div>
-            ) : (
-              <FileExplorer
-                folders={fileSystem.folders}
-                files={fileSystem.files}
-                onFileClick={handleFileClick}
-                onCreateFile={handleCreateFile}
-                onCreateFolder={handleCreateFolder}
-                onDeleteFile={handleDeleteFile}
-                onDeleteFolder={handleDeleteFolder}
-                toggleFolderOpen={toggleFolderOpen}
-                activeFileId={leftActiveFile || rightActiveFile}
-                onSplitView={handleSplitView}
-              />
-            )}
+            {searchTerm.trim() !== "" ? renderSearchResults() : renderFileExplorer()}
           </div>
         </div>
 
@@ -574,7 +810,7 @@ export default function Home() {
       {/* Status bar */}
       <StatusBar />
 
-      {/* Settings Menu (выпадающее меню) */}
+      {/* Settings Menu */}
       <SettingsMenu
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
@@ -582,6 +818,93 @@ export default function Home() {
         onFontSizeChange={setFontSize}
         anchorEl={settingsButtonRef.current}
       />
+
+      {/* New Item Dialog */}
+      <Dialog open={newItemDialogOpen} onOpenChange={setNewItemDialogOpen}>
+        <DialogContent className="bg-[#3c3f41] border-gray-700 text-gray-300 p-0">
+          <DialogHeader className="p-4 border-b border-gray-700">
+            <DialogTitle>New {newItemType === "file" ? "File" : "Folder"}</DialogTitle>
+          </DialogHeader>
+          <div className="p-4">
+            <Input
+              value={newItemName}
+              onChange={(e) => setNewItemName(e.target.value)}
+              placeholder={`Enter ${newItemType} name`}
+              autoFocus
+              className="bg-[#2b2b2b] border-gray-700 text-gray-300"
+            />
+          </div>
+          <DialogFooter className="p-4 border-t border-gray-700 bg-[#3c3f41]">
+            <Button
+              variant="outline"
+              onClick={() => setNewItemDialogOpen(false)}
+              className="bg-[#4b4b4b] text-gray-300 border-gray-700 hover:bg-[#5a5a5a]"
+            >
+              Cancel
+            </Button>
+            <Button onClick={createNewItem} className="bg-[#4b6eaf] text-white hover:bg-[#5a7dbf]">
+              Create
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Rename Dialog */}
+      <Dialog open={renameDialogOpen} onOpenChange={setRenameDialogOpen}>
+        <DialogContent className="bg-[#3c3f41] border-gray-700 text-gray-300 p-0">
+          <DialogHeader className="p-4 border-b border-gray-700">
+            <DialogTitle>Rename {itemToRename?.type === "file" ? "File" : "Folder"}</DialogTitle>
+          </DialogHeader>
+          <div className="p-4">
+            <Input
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              placeholder="Enter new name"
+              autoFocus
+              className="bg-[#2b2b2b] border-gray-700 text-gray-300"
+            />
+          </div>
+          <DialogFooter className="p-4 border-t border-gray-700 bg-[#3c3f41]">
+            <Button
+              variant="outline"
+              onClick={() => setRenameDialogOpen(false)}
+              className="bg-[#4b4b4b] text-gray-300 border-gray-700 hover:bg-[#5a5a5a]"
+            >
+              Cancel
+            </Button>
+            <Button onClick={renameItem} className="bg-[#4b6eaf] text-white hover:bg-[#5a7dbf]">
+              Rename
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <DialogContent className="bg-[#3c3f41] border-gray-700 text-gray-300 p-0">
+          <DialogHeader className="p-4 border-b border-gray-700">
+            <DialogTitle>Confirm Delete</DialogTitle>
+          </DialogHeader>
+          <div className="p-4">
+            <p>Are you sure you want to delete this {itemToDelete?.type}?</p>
+            {itemToDelete?.type === "folder" && (
+              <p className="text-red-400 mt-2">Warning: This will delete all files and folders inside.</p>
+            )}
+          </div>
+          <DialogFooter className="p-4 border-t border-gray-700 bg-[#3c3f41]">
+            <Button
+              variant="outline"
+              onClick={() => setDeleteConfirmOpen(false)}
+              className="bg-[#4b4b4b] text-gray-300 border-gray-700 hover:bg-[#5a5a5a]"
+            >
+              Cancel
+            </Button>
+            <Button onClick={deleteItem} className="bg-[#ff5370] text-white hover:bg-[#ff3860]">
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

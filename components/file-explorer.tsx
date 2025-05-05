@@ -5,9 +5,6 @@ import type React from "react"
 import { useState, useEffect } from "react"
 import { Folder, File, ChevronRight, ChevronDown, MoreVertical, SplitSquareVertical } from "lucide-react"
 import type { FileType, FolderType } from "@/types/file-system"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 
 interface FileExplorerProps {
   folders: FolderType[]
@@ -20,6 +17,7 @@ interface FileExplorerProps {
   toggleFolderOpen: (folderId: string) => void
   activeFileId: string | null
   onSplitView: (fileId: string) => void
+  onRename?: (type: "file" | "folder", id: string) => void
 }
 
 export default function FileExplorer({
@@ -33,11 +31,8 @@ export default function FileExplorer({
   toggleFolderOpen,
   activeFileId,
   onSplitView,
+  onRename,
 }: FileExplorerProps) {
-  const [newItemDialogOpen, setNewItemDialogOpen] = useState(false)
-  const [newItemName, setNewItemName] = useState("")
-  const [newItemType, setNewItemType] = useState<"file" | "folder">("file")
-  const [currentParentId, setCurrentParentId] = useState<string | null>(null)
   const [contextMenu, setContextMenu] = useState<{
     x: number
     y: number
@@ -60,22 +55,12 @@ export default function FileExplorer({
   }, [contextMenu])
 
   const handleNewItem = (type: "file" | "folder", parentId: string) => {
-    setNewItemType(type)
-    setCurrentParentId(parentId)
-    setNewItemName("")
-    setNewItemDialogOpen(true)
-  }
-
-  const handleCreateItem = () => {
-    if (!newItemName.trim() || !currentParentId) return
-
-    if (newItemType === "file") {
-      onCreateFile(newItemName, currentParentId)
+    if (type === "file") {
+      onCreateFile("New File", parentId)
     } else {
-      onCreateFolder(newItemName, currentParentId)
+      onCreateFolder("New Folder", parentId)
     }
-
-    setNewItemDialogOpen(false)
+    closeContextMenu()
   }
 
   const handleContextMenu = (e: React.MouseEvent, type: "file" | "folder", id: string) => {
@@ -212,14 +197,14 @@ export default function FileExplorer({
             top: `${contextMenu.y}px`,
             left: `${contextMenu.x}px`,
           }}
+          onClick={(e) => e.stopPropagation()} // Предотвращаем закрытие меню при клике на него
         >
           {contextMenu.type === "folder" && (
             <>
               <button
                 className="block w-full text-left px-4 py-2 hover:bg-[#4b6eaf] text-sm"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  handleNewItem("file", contextMenu.id)
+                onClick={() => {
+                  onCreateFile("New File", contextMenu.id)
                   closeContextMenu()
                 }}
               >
@@ -227,19 +212,28 @@ export default function FileExplorer({
               </button>
               <button
                 className="block w-full text-left px-4 py-2 hover:bg-[#4b6eaf] text-sm"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  handleNewItem("folder", contextMenu.id)
+                onClick={() => {
+                  onCreateFolder("New Folder", contextMenu.id)
                   closeContextMenu()
                 }}
               >
                 New Folder
               </button>
+              {onRename && (
+                <button
+                  className="block w-full text-left px-4 py-2 hover:bg-[#4b6eaf] text-sm"
+                  onClick={() => {
+                    onRename("folder", contextMenu.id)
+                    closeContextMenu()
+                  }}
+                >
+                  Rename
+                </button>
+              )}
               <div className="border-t border-gray-700"></div>
               <button
                 className="block w-full text-left px-4 py-2 hover:bg-[#4b6eaf] text-sm"
-                onClick={(e) => {
-                  e.stopPropagation()
+                onClick={() => {
                   onDeleteFolder(contextMenu.id)
                   closeContextMenu()
                 }}
@@ -252,19 +246,28 @@ export default function FileExplorer({
             <>
               <button
                 className="block w-full text-left px-4 py-2 hover:bg-[#4b6eaf] text-sm"
-                onClick={(e) => {
-                  e.stopPropagation()
+                onClick={() => {
                   onSplitView(contextMenu.id)
                   closeContextMenu()
                 }}
               >
                 Split Right
               </button>
+              {onRename && (
+                <button
+                  className="block w-full text-left px-4 py-2 hover:bg-[#4b6eaf] text-sm"
+                  onClick={() => {
+                    onRename("file", contextMenu.id)
+                    closeContextMenu()
+                  }}
+                >
+                  Rename
+                </button>
+              )}
               <div className="border-t border-gray-700"></div>
               <button
                 className="block w-full text-left px-4 py-2 hover:bg-[#4b6eaf] text-sm"
-                onClick={(e) => {
-                  e.stopPropagation()
+                onClick={() => {
                   onDeleteFile(contextMenu.id)
                   closeContextMenu()
                 }}
@@ -275,35 +278,6 @@ export default function FileExplorer({
           )}
         </div>
       )}
-
-      <Dialog open={newItemDialogOpen} onOpenChange={setNewItemDialogOpen}>
-        <DialogContent className="bg-[#3c3f41] border-gray-700 text-gray-300 p-0">
-          <DialogHeader className="p-4 border-b border-gray-700">
-            <DialogTitle>New {newItemType === "file" ? "File" : "Folder"}</DialogTitle>
-          </DialogHeader>
-          <div className="p-4">
-            <Input
-              value={newItemName}
-              onChange={(e) => setNewItemName(e.target.value)}
-              placeholder={`Enter ${newItemType} name`}
-              autoFocus
-              className="bg-[#2b2b2b] border-gray-700 text-gray-300"
-            />
-          </div>
-          <DialogFooter className="p-4 border-t border-gray-700 bg-[#3c3f41]">
-            <Button
-              variant="outline"
-              onClick={() => setNewItemDialogOpen(false)}
-              className="bg-[#4b4b4b] text-gray-300 border-gray-700 hover:bg-[#5a5a5a]"
-            >
-              Cancel
-            </Button>
-            <Button onClick={handleCreateItem} className="bg-[#4b6eaf] text-white hover:bg-[#5a7dbf]">
-              Create
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }
