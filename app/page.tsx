@@ -1,13 +1,13 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect } from "react"
-import { X, ChevronDown, MoreVertical } from "lucide-react"
+import { useState, useEffect, useRef } from "react"
+import { X, MoreVertical, Settings, Menu, Search, User, SplitSquareVertical, File } from "lucide-react"
 import { useLocalStorage } from "@/hooks/use-local-storage"
 import FileExplorer from "@/components/file-explorer"
 import Editor from "@/components/editor"
-import Toolbar from "@/components/toolbar"
 import StatusBar from "@/components/status-bar"
+import SettingsMenu from "@/components/settings-menu"
 import type { FileType, FolderType } from "@/types/file-system"
 
 export default function Home() {
@@ -23,6 +23,16 @@ export default function Home() {
   const [splitView, setSplitView] = useLocalStorage<boolean>("pycharm-split-view", false)
   // Track which tab is being dragged
   const [draggedTab, setDraggedTab] = useState<{ pane: "left" | "right"; fileId: string } | null>(null)
+  // Track editor settings
+  const [fontSize, setFontSize] = useLocalStorage<number>("pycharm-font-size", 14)
+  // Track settings menu open state
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  // Reference to the settings button
+  const settingsButtonRef = useRef<HTMLButtonElement>(null)
+
+  // Track search state
+  const [searchTerm, setSearchTerm] = useState("")
+  const [searchResults, setSearchResults] = useState<FileType[]>([])
 
   const [fileSystem, setFileSystem] = useLocalStorage<{
     folders: FolderType[]
@@ -260,6 +270,11 @@ export default function Home() {
     setSplitView((prev) => !prev)
   }
 
+  // Toggle settings menu
+  const toggleSettingsMenu = () => {
+    setSettingsOpen((prev) => !prev)
+  }
+
   // Drag and drop handlers
   const handleDragStart = (pane: "left" | "right", fileId: string) => {
     setDraggedTab({ pane, fileId })
@@ -363,18 +378,78 @@ export default function Home() {
     )
   }
 
+  const onFileClick = (fileId: string) => {
+    handleFileClick(fileId)
+  }
+
+  const onSplitView = (fileId: string) => {
+    handleSplitView(fileId)
+  }
+
+  const handleContextMenu = (event: React.MouseEvent, type: "file" | "folder", id: string) => {
+    event.preventDefault()
+    console.log(`Context menu for ${type} with id ${id}`)
+  }
+
   return (
     <div className="flex flex-col h-screen bg-[#2b2b2b] text-gray-300 overflow-hidden">
       {/* Top toolbar */}
-      <Toolbar />
+      <div className="flex items-center justify-between bg-[#3c3f41] border-b border-gray-700 text-sm">
+        <div className="flex items-center">
+          <button className="p-2 hover:bg-gray-600">
+            <Menu className="h-4 w-4" />
+          </button>
+
+          <div className="flex items-center px-3 py-2 hover:bg-gray-600">
+            <span className="font-medium">PingVim</span>
+          </div>
+        </div>
+
+        <div className="flex items-center">
+          <button className="p-2 hover:bg-gray-600">
+            <Search className="h-4 w-4" />
+          </button>
+
+          <button ref={settingsButtonRef} className="p-2 hover:bg-gray-600" onClick={toggleSettingsMenu}>
+            <Settings className="h-4 w-4" />
+          </button>
+
+          <button className="p-2 hover:bg-gray-600">
+            <User className="h-4 w-4" />
+          </button>
+
+          <button className="p-2 hover:bg-gray-600">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
 
       <div className="flex flex-1 overflow-hidden">
         {/* Left sidebar - Project explorer */}
         <div className="w-64 border-r border-gray-700 flex flex-col">
-          <div className="p-2 font-semibold flex items-center justify-between border-b border-gray-700">
-            <div className="flex items-center">
-              <span>Project</span>
-              <ChevronDown className="h-4 w-4 ml-1" />
+          <div className="h-9 flex items-center justify-between border-b border-gray-700 bg-[#3c3f41] px-2">
+            <div className="flex items-center flex-1 mr-2">
+              <Search className="h-4 w-4 mr-2 text-gray-400 flex-shrink-0" />
+              <input
+                type="text"
+                placeholder="Search files..."
+                className="bg-[#2b2b2b] text-sm border-none outline-none focus:ring-0 w-full h-6 px-2 text-gray-300"
+                value={searchTerm}
+                onChange={(e) => {
+                  const term = e.target.value
+                  setSearchTerm(term)
+
+                  if (term.trim() === "") {
+                    setSearchResults([])
+                  } else {
+                    // Поиск файлов по имени
+                    const results = fileSystem.files.filter((file) =>
+                      file.name.toLowerCase().includes(term.toLowerCase()),
+                    )
+                    setSearchResults(results)
+                  }
+                }}
+              />
             </div>
             <div className="flex items-center space-x-1">
               <button className="p-1 hover:bg-gray-600 rounded">
@@ -384,18 +459,62 @@ export default function Home() {
           </div>
 
           <div className="flex-1 overflow-auto">
-            <FileExplorer
-              folders={fileSystem.folders}
-              files={fileSystem.files}
-              onFileClick={handleFileClick}
-              onCreateFile={handleCreateFile}
-              onCreateFolder={handleCreateFolder}
-              onDeleteFile={handleDeleteFile}
-              onDeleteFolder={handleDeleteFolder}
-              toggleFolderOpen={toggleFolderOpen}
-              activeFileId={leftActiveFile || rightActiveFile}
-              onSplitView={handleSplitView}
-            />
+            {searchTerm.trim() !== "" ? (
+              <div className="p-2">
+                {searchResults.length > 0 ? (
+                  searchResults.map((file) => (
+                    <div
+                      key={file.id}
+                      className={`flex items-center py-1 px-2 hover:bg-[#4b6eaf] cursor-pointer ${
+                        leftActiveFile === file.id || rightActiveFile === file.id ? "bg-[#4b6eaf]" : ""
+                      }`}
+                      onClick={() => onFileClick(file.id)}
+                    >
+                      <File className="h-4 w-4 mr-1 text-gray-400 flex-shrink-0" />
+                      <span className="text-sm truncate">{file.name}</span>
+
+                      <div className="ml-auto flex items-center">
+                        <button
+                          className="p-1 hover:bg-gray-600"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            onSplitView(file.id)
+                          }}
+                          title="Open in Split View"
+                        >
+                          <SplitSquareVertical className="h-3 w-3" />
+                        </button>
+                        <button
+                          className="p-1 hover:bg-gray-600"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            const rect = e.currentTarget.getBoundingClientRect()
+                            handleContextMenu(e, "file", file.id)
+                          }}
+                        >
+                          <MoreVertical className="h-3 w-3" />
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-gray-500 text-sm p-2">No files found</div>
+                )}
+              </div>
+            ) : (
+              <FileExplorer
+                folders={fileSystem.folders}
+                files={fileSystem.files}
+                onFileClick={handleFileClick}
+                onCreateFile={handleCreateFile}
+                onCreateFolder={handleCreateFolder}
+                onDeleteFile={handleDeleteFile}
+                onDeleteFolder={handleDeleteFolder}
+                toggleFolderOpen={toggleFolderOpen}
+                activeFileId={leftActiveFile || rightActiveFile}
+                onSplitView={handleSplitView}
+              />
+            )}
           </div>
         </div>
 
@@ -415,6 +534,7 @@ export default function Home() {
                     content={leftActiveFileObj.content}
                     onChange={(newContent) => handleFileContentChange(leftActiveFile, newContent)}
                     showLineNumbers={true}
+                    fontSize={fontSize}
                   />
                 ) : (
                   <div className="flex items-center justify-center h-full text-gray-500">
@@ -437,6 +557,7 @@ export default function Home() {
                       content={rightActiveFileObj.content}
                       onChange={(newContent) => handleFileContentChange(rightActiveFile, newContent)}
                       showLineNumbers={true}
+                      fontSize={fontSize}
                     />
                   ) : (
                     <div className="flex items-center justify-center h-full text-gray-500">
@@ -452,6 +573,15 @@ export default function Home() {
 
       {/* Status bar */}
       <StatusBar />
+
+      {/* Settings Menu (выпадающее меню) */}
+      <SettingsMenu
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        fontSize={fontSize}
+        onFontSizeChange={setFontSize}
+        anchorEl={settingsButtonRef.current}
+      />
     </div>
   )
 }

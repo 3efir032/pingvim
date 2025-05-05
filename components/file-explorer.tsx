@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Folder, File, ChevronRight, ChevronDown, MoreVertical, SplitSquareVertical } from "lucide-react"
 import type { FileType, FolderType } from "@/types/file-system"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
@@ -45,6 +45,20 @@ export default function FileExplorer({
     id: string
   } | null>(null)
 
+  // Close context menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (contextMenu) {
+        setContextMenu(null)
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside)
+    }
+  }, [contextMenu])
+
   const handleNewItem = (type: "file" | "folder", parentId: string) => {
     setNewItemType(type)
     setCurrentParentId(parentId)
@@ -67,9 +81,36 @@ export default function FileExplorer({
   const handleContextMenu = (e: React.MouseEvent, type: "file" | "folder", id: string) => {
     e.preventDefault()
     e.stopPropagation()
+
+    // Get the position of the click
+    const x = e.clientX
+    const y = e.clientY
+
+    // Calculate available space
+    const viewportWidth = window.innerWidth
+    const viewportHeight = window.innerHeight
+
+    // Estimate menu dimensions
+    const menuWidth = 120 // Approximate width of the menu
+    const menuHeight = type === "file" ? 80 : 120 // Approximate height based on menu type
+
+    // Adjust position if menu would go off-screen
+    let adjustedX = x
+    let adjustedY = y
+
+    // Check horizontal overflow
+    if (x + menuWidth > viewportWidth) {
+      adjustedX = viewportWidth - menuWidth - 8 // 8px margin
+    }
+
+    // Check vertical overflow
+    if (y + menuHeight > viewportHeight) {
+      adjustedY = viewportHeight - menuHeight - 8 // 8px margin
+    }
+
     setContextMenu({
-      x: e.clientX,
-      y: e.clientY,
+      x: adjustedX,
+      y: adjustedY,
       type,
       id,
     })
@@ -166,18 +207,18 @@ export default function FileExplorer({
       {/* Context Menu */}
       {contextMenu && (
         <div
-          className="absolute bg-[#3c3f41] border border-gray-700 shadow-lg z-50"
+          className="fixed bg-[#3c3f41] border border-gray-700 shadow-lg z-50 rounded-none"
           style={{
             top: `${contextMenu.y}px`,
             left: `${contextMenu.x}px`,
-            transform: "translate(-100%, 0)",
           }}
         >
           {contextMenu.type === "folder" && (
             <>
               <button
                 className="block w-full text-left px-4 py-2 hover:bg-[#4b6eaf] text-sm"
-                onClick={() => {
+                onClick={(e) => {
+                  e.stopPropagation()
                   handleNewItem("file", contextMenu.id)
                   closeContextMenu()
                 }}
@@ -186,7 +227,8 @@ export default function FileExplorer({
               </button>
               <button
                 className="block w-full text-left px-4 py-2 hover:bg-[#4b6eaf] text-sm"
-                onClick={() => {
+                onClick={(e) => {
+                  e.stopPropagation()
                   handleNewItem("folder", contextMenu.id)
                   closeContextMenu()
                 }}
@@ -196,7 +238,8 @@ export default function FileExplorer({
               <div className="border-t border-gray-700"></div>
               <button
                 className="block w-full text-left px-4 py-2 hover:bg-[#4b6eaf] text-sm"
-                onClick={() => {
+                onClick={(e) => {
+                  e.stopPropagation()
                   onDeleteFolder(contextMenu.id)
                   closeContextMenu()
                 }}
@@ -209,7 +252,8 @@ export default function FileExplorer({
             <>
               <button
                 className="block w-full text-left px-4 py-2 hover:bg-[#4b6eaf] text-sm"
-                onClick={() => {
+                onClick={(e) => {
+                  e.stopPropagation()
                   onSplitView(contextMenu.id)
                   closeContextMenu()
                 }}
@@ -219,7 +263,8 @@ export default function FileExplorer({
               <div className="border-t border-gray-700"></div>
               <button
                 className="block w-full text-left px-4 py-2 hover:bg-[#4b6eaf] text-sm"
-                onClick={() => {
+                onClick={(e) => {
+                  e.stopPropagation()
                   onDeleteFile(contextMenu.id)
                   closeContextMenu()
                 }}
