@@ -77,7 +77,7 @@ export default function Home() {
   const sidebarRef = useRef<HTMLDivElement>(null)
   const isResizingRef = useRef(false)
   const minWidth = 200
-  const collapsedWidth = 25
+  const collapsedWidth = 50
 
   // Split view resizing
   const [splitRatio, setSplitRatio] = useLocalStorage<number>("pycharm-split-ratio", 50) // 50% for left pane
@@ -161,11 +161,6 @@ export default function Home() {
         // Напрямую обновляем DOM без использования React состояния
         sidebar.style.width = `${newWidth}px`
         sidebarWidthRef.current = newWidth
-
-        // Обновляем градиент в реальном времени
-        const gradientWidth = newWidth
-        const blurAmount = 20 // Размытие в пикселях
-        toolbar.style.background = `linear-gradient(to right, #1B1C1F 0%, #1B1C1F ${gradientWidth - blurAmount}px, #1E1F22 ${gradientWidth + blurAmount}px)`
 
         // Предотвращаем выделение текста во время перетаскивания
         e.preventDefault()
@@ -264,14 +259,7 @@ export default function Home() {
     }
   }, [initSplitResizer, splitView])
 
-  useEffect(() => {
-    const toolbar = toolbarRef.current
-    if (!toolbar) return
-
-    const gradientWidth = sidebarCollapsed ? collapsedWidth : sidebarWidth
-    const blurAmount = 20 // Размытие в пикселях
-    toolbar.style.background = `linear-gradient(to right, #1B1C1F 0%, #1B1C1F ${gradientWidth - blurAmount}px, #1E1F22 ${gradientWidth + blurAmount}px)`
-  }, [sidebarWidth, sidebarCollapsed, collapsedWidth])
+  // Применяем градиент к боковой панели
 
   const toggleSidebar = () => {
     setSidebarCollapsed(!sidebarCollapsed)
@@ -617,7 +605,7 @@ export default function Home() {
 
     return (
       <div
-        className="flex items-center border-b border-gray-700 bg-[#1E1F22] overflow-x-auto h-9"
+        className="flex items-center bg-[#1E1F22] overflow-x-auto h-9"
         onDragOver={handleDragOver}
         onDrop={() => handleDrop(pane)}
       >
@@ -630,7 +618,7 @@ export default function Home() {
           return (
             <div
               key={fileId}
-              className={`flex items-center px-3 py-1 border-r border-gray-700 cursor-pointer h-full ${
+              className={`flex items-center px-3 py-1 cursor-pointer h-full ${
                 isActive
                   ? "bg-[#1E1F22] border-b-4 border-b-[#2E436E]"
                   : "bg-[#1E1F22] hover:bg-[#3f4244] border-b-4 border-b-transparent"
@@ -849,7 +837,7 @@ export default function Home() {
   return (
     <div className="flex flex-col h-screen bg-[#2b2b2b] text-gray-300 overflow-hidden">
       {/* Top toolbar */}
-      <div ref={toolbarRef} className="flex items-center border-b border-gray-700 text-sm h-10">
+      <div ref={toolbarRef} className="flex items-center text-sm h-10 bg-[#1B1C1F]">
         <div className="flex items-center">
           <div className="flex items-center px-2 py-1">
             <div className="bg-yellow-500 text-black font-bold w-6 h-6 flex items-center justify-center rounded">
@@ -877,19 +865,19 @@ export default function Home() {
         {/* Left sidebar - Project explorer */}
         <div
           ref={sidebarRef}
-          className={`border-r border-gray-700 flex flex-col ease-in-out bg-[#1B1C1F]`}
+          className={`flex flex-col ease-in-out bg-[#1B1C1F]`}
           style={{
             width: sidebarCollapsed ? `${collapsedWidth}px` : `${sidebarWidth}px`,
             minWidth: sidebarCollapsed ? `${collapsedWidth}px` : `${minWidth}px`,
           }}
         >
-          <div className="h-9 flex items-center justify-between border-b border-gray-700 bg-[#1B1C1F] px-2">
+          <div className="h-9 flex items-center justify-between bg-transparent px-2">
             <div className={`flex items-center flex-1 mr-2 ${sidebarCollapsed ? "hidden" : ""}`}>
               <Search className="h-4 w-4 mr-2 text-gray-400 flex-shrink-0" />
               <input
                 type="text"
                 placeholder="Search files..."
-                className="bg-[#2b2b2b] text-sm border-none outline-none focus:ring-0 w-full h-6 px-2 text-gray-300 rounded-md"
+                className="bg-[#1E1F22] text-sm border-none outline-none focus:ring-0 w-full h-6 px-2 text-gray-300 rounded-md"
                 value={searchTerm}
                 onChange={(e) => {
                   const term = e.target.value
@@ -918,24 +906,27 @@ export default function Home() {
             </div>
           </div>
 
-          <div className={`flex-1 overflow-auto bg-[#1B1C1F] ${sidebarCollapsed ? "hidden" : ""}`}>
+          <div className={`flex-1 overflow-auto bg-transparent ${sidebarCollapsed ? "hidden" : ""}`}>
             {searchTerm.trim() !== "" ? renderSearchResults() : renderFileExplorer()}
           </div>
         </div>
 
         {/* Добавить элемент для изменения размера */}
-        <div id="sidebar-resizer" className="w-[2px] cursor-col-resize hover:bg-gray-500 active:bg-gray-400 z-10" />
+        <div
+          id="sidebar-resizer"
+          className="w-[2px] cursor-col-resize hover:bg-gray-500 active:bg-gray-400 z-10"
+          style={{
+            background: "linear-gradient(to right, #1B1C1F 0%, #1E1F22 100%)",
+            opacity: 0.8,
+          }}
+        />
 
         {/* Main content area */}
         <div ref={contentAreaRef} className="flex-1 flex flex-col">
           {/* Split view container */}
           <div className="flex flex-1 overflow-hidden">
             {/* Left pane */}
-            <div
-              ref={leftPaneRef}
-              className="flex flex-col border-r border-gray-700"
-              style={{ width: splitView ? `${splitRatio}%` : "100%" }}
-            >
+            <div ref={leftPaneRef} className="flex flex-col" style={{ width: splitView ? `${splitRatio}%` : "100%" }}>
               {/* Left pane tabs */}
               {renderFileTabs("left")}
 
@@ -958,7 +949,14 @@ export default function Home() {
 
             {/* Split resizer (only shown in split view) */}
             {splitView && (
-              <div id="split-resizer" className="w-[2px] cursor-col-resize hover:bg-gray-500 active:bg-gray-400 z-10" />
+              <div
+                id="split-resizer"
+                className="w-[2px] cursor-col-resize hover:bg-gray-500 active:bg-gray-400 z-10"
+                style={{
+                  background: "linear-gradient(to right, #1B1C1F 0%, #1E1F22 100%)",
+                  opacity: 0.8,
+                }}
+              />
             )}
 
             {/* Right pane (only shown in split view) */}
