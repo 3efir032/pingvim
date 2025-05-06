@@ -71,14 +71,16 @@ export default function SettingsMenu({ open, onClose, fontSize, onFontSizeChange
   return (
     <div
       ref={menuRef}
-      className="fixed z-50 bg-[#3c3f41] border border-gray-700 shadow-lg p-4 rounded-none w-64"
-      style={{ top: `${top}px`, left: `${left}px` }}
+      className="fixed z-50 bg-[#1B1C1F] border border-gray-700 p-3 rounded-md w-64"
+      style={{
+        top: `${top}px`,
+        left: `${left}px`,
+        fontSize: "13px",
+        boxShadow: "0 0 10px rgba(0, 0, 0, 0.5), 0 5px 15px rgba(0, 0, 0, 0.3)",
+      }}
     >
-      <div className="mb-4">
-        <h3 className="text-sm font-medium mb-2">Editor Settings</h3>
-      </div>
-      <div className="space-y-4">
-        <div className="space-y-2">
+      <div className="space-y-3">
+        <div className="space-y-1">
           <div className="flex items-center justify-between">
             <Label htmlFor="font-size">Font Size: {tempFontSize}px</Label>
           </div>

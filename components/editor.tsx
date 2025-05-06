@@ -10,7 +10,7 @@ interface EditorProps {
   fontSize?: number
 }
 
-export default function Editor({ content, onChange, showLineNumbers = false, fontSize = 14 }: EditorProps) {
+export default function Editor({ content, onChange, showLineNumbers = false, fontSize = 13 }: EditorProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const editorRef = useRef<HTMLDivElement>(null)
   const cursorPositionRef = useRef<{ start: number; end: number } | null>(null)
@@ -173,11 +173,11 @@ export default function Editor({ content, onChange, showLineNumbers = false, fon
   }, [])
 
   return (
-    <div ref={editorRef} className="h-full w-full bg-[#2b2b2b] flex relative">
+    <div ref={editorRef} className="h-full w-full bg-[#1E1F22] flex relative">
       {showLineNumbers && (
         <div
           id="line-numbers"
-          className="py-4 pr-2 pl-2 text-right bg-[#313335] text-gray-500 select-none font-mono overflow-hidden"
+          className="py-4 pr-2 pl-2 text-right bg-[#1E1F22] text-gray-500 select-none font-mono overflow-hidden border-r border-gray-700"
           style={{
             position: "absolute",
             top: 0,
@@ -207,6 +207,7 @@ export default function Editor({ content, onChange, showLineNumbers = false, fon
             margin: 0,
             border: "none",
             lineHeight: "24px", // Фиксированная высота строки
+            backgroundColor: "#1E1F22",
           }}
           dangerouslySetInnerHTML={{ __html: formatContentWithColors() + " " }}
         />

@@ -112,7 +112,7 @@ export default function FileExplorer({
     return (
       <div key={folder.id} className="select-none">
         <div
-          className="flex items-center py-1 px-2 hover:bg-[#4b6eaf] cursor-pointer group"
+          className="flex items-center py-1 px-2 hover:bg-[#2E436E] cursor-pointer group"
           onClick={() => toggleFolderOpen(folder.id)}
           onContextMenu={(e) => handleContextMenu(e, "folder", folder.id)}
         >
@@ -144,8 +144,8 @@ export default function FileExplorer({
             {childFiles.map((file) => (
               <div
                 key={file.id}
-                className={`flex items-center py-1 px-2 hover:bg-[#4b6eaf] cursor-pointer group ${
-                  activeFileId === file.id ? "bg-[#4b6eaf]" : ""
+                className={`flex items-center py-1 px-2 hover:bg-[#2E436E] cursor-pointer group ${
+                  activeFileId === file.id ? "bg-[#2E436E]" : ""
                 }`}
                 onClick={() => onFileClick(file.id)}
                 onContextMenu={(e) => handleContextMenu(e, "file", file.id)}
@@ -202,7 +202,7 @@ export default function FileExplorer({
           {contextMenu.type === "folder" && (
             <>
               <button
-                className="block w-full text-left px-4 py-2 hover:bg-[#4b6eaf] text-sm"
+                className="block w-full text-left px-4 py-2 hover:bg-[#2E436E] text-sm"
                 onClick={() => {
                   onCreateFile("New File", contextMenu.id)
                   closeContextMenu()
@@ -211,7 +211,7 @@ export default function FileExplorer({
                 New File
               </button>
               <button
-                className="block w-full text-left px-4 py-2 hover:bg-[#4b6eaf] text-sm"
+                className="block w-full text-left px-4 py-2 hover:bg-[#2E436E] text-sm"
                 onClick={() => {
                   onCreateFolder("New Folder", contextMenu.id)
                   closeContextMenu()
@@ -221,7 +221,7 @@ export default function FileExplorer({
               </button>
               {onRename && (
                 <button
-                  className="block w-full text-left px-4 py-2 hover:bg-[#4b6eaf] text-sm"
+                  className="block w-full text-left px-4 py-2 hover:bg-[#2E436E] text-sm"
                   onClick={() => {
                     onRename("folder", contextMenu.id)
                     closeContextMenu()
@@ -232,7 +232,7 @@ export default function FileExplorer({
               )}
               <div className="border-t border-gray-700"></div>
               <button
-                className="block w-full text-left px-4 py-2 hover:bg-[#4b6eaf] text-sm"
+                className="block w-full text-left px-4 py-2 hover:bg-[#2E436E] text-sm"
                 onClick={() => {
                   onDeleteFolder(contextMenu.id)
                   closeContextMenu()
@@ -245,7 +245,7 @@ export default function FileExplorer({
           {contextMenu.type === "file" && (
             <>
               <button
-                className="block w-full text-left px-4 py-2 hover:bg-[#4b6eaf] text-sm"
+                className="block w-full text-left px-4 py-2 hover:bg-[#2E436E] text-sm"
                 onClick={() => {
                   onSplitView(contextMenu.id)
                   closeContextMenu()
@@ -255,7 +255,7 @@ export default function FileExplorer({
               </button>
               {onRename && (
                 <button
-                  className="block w-full text-left px-4 py-2 hover:bg-[#4b6eaf] text-sm"
+                  className="block w-full text-left px-4 py-2 hover:bg-[#2E436E] text-sm"
                   onClick={() => {
                     onRename("file", contextMenu.id)
                     closeContextMenu()
@@ -266,7 +266,7 @@ export default function FileExplorer({
               )}
               <div className="border-t border-gray-700"></div>
               <button
-                className="block w-full text-left px-4 py-2 hover:bg-[#4b6eaf] text-sm"
+                className="block w-full text-left px-4 py-2 hover:bg-[#2E436E] text-sm"
                 onClick={() => {
                   onDeleteFile(contextMenu.id)
                   closeContextMenu()

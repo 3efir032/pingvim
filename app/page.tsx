@@ -1,12 +1,9 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useCallback, useLayoutEffect } from "react"
 import {
-  X,
-  MoreVertical,
   Settings,
-  Menu,
   Search,
   User,
   SplitSquareVertical,
@@ -17,6 +14,9 @@ import {
   Plus,
   Trash,
   Edit,
+  ChevronLeft,
+  ChevronRightIcon,
+  X,
 } from "lucide-react"
 import { useLocalStorage } from "@/hooks/use-local-storage"
 import Editor from "@/components/editor"
@@ -71,6 +71,23 @@ export default function Home() {
     type: "file" | "folder"
   } | null>(null)
 
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [sidebarWidth, setSidebarWidth] = useState(256) // 256px = 64 * 4 (w-64)
+  const sidebarWidthRef = useRef(256)
+  const sidebarRef = useRef<HTMLDivElement>(null)
+  const isResizingRef = useRef(false)
+  const minWidth = 200
+  const collapsedWidth = 25
+
+  // Split view resizing
+  const [splitRatio, setSplitRatio] = useLocalStorage<number>("pycharm-split-ratio", 50) // 50% for left pane
+  const splitRatioRef = useRef(50)
+  const leftPaneRef = useRef<HTMLDivElement>(null)
+  const rightPaneRef = useRef<HTMLDivElement>(null)
+  const contentAreaRef = useRef<HTMLDivElement>(null)
+  const isSplitResizingRef = useRef(false)
+  const minSplitWidth = 20 // Minimum percentage for each pane
+
   const [fileSystem, setFileSystem] = useLocalStorage<{
     folders: FolderType[]
     files: FileType[]
@@ -109,12 +126,156 @@ export default function Home() {
     ],
   })
 
+  // После других useRef
+  const toolbarRef = useRef<HTMLDivElement>(null)
+
   // Enable split view if there are files in the right pane
   useEffect(() => {
     if (rightPaneFiles.length > 0 && !splitView) {
       setSplitView(true)
     }
   }, [rightPaneFiles, splitView, setSplitView])
+
+  const initResizer = useCallback(() => {
+    const resizer = document.getElementById("sidebar-resizer")
+    const sidebar = sidebarRef.current
+    const toolbar = toolbarRef.current
+
+    if (!resizer || !sidebar || !toolbar) return
+
+    const onMouseDown = (e: MouseEvent) => {
+      e.preventDefault()
+      isResizingRef.current = true
+      document.body.classList.add("select-none")
+
+      // Запоминаем начальную позицию курсора
+      const startX = e.clientX
+      const startWidth = sidebar.getBoundingClientRect().width
+
+      const onMouseMove = (e: MouseEvent) => {
+        if (!isResizingRef.current || sidebarCollapsed) return
+
+        // Рассчитываем новую ширину на основе смещения курсора
+        const newWidth = Math.max(startWidth + (e.clientX - startX), minWidth)
+
+        // Напрямую обновляем DOM без использования React состояния
+        sidebar.style.width = `${newWidth}px`
+        sidebarWidthRef.current = newWidth
+
+        // Обновляем градиент в реальном времени
+        const gradientWidth = newWidth
+        const blurAmount = 20 // Размытие в пикселях
+        toolbar.style.background = `linear-gradient(to right, #1B1C1F 0%, #1B1C1F ${gradientWidth - blurAmount}px, #1E1F22 ${gradientWidth + blurAmount}px)`
+
+        // Предотвращаем выделение текста во время перетаскивания
+        e.preventDefault()
+      }
+
+      const onMouseUp = () => {
+        isResizingRef.current = false
+        document.body.classList.remove("select-none")
+
+        // Обновляем React состояние только после завершения перетаскивания
+        setSidebarWidth(sidebarWidthRef.current)
+
+        document.removeEventListener("mousemove", onMouseMove)
+        document.removeEventListener("mouseup", onMouseUp)
+      }
+
+      // Используем { passive: false } для предотвращения задержек в обработке событий
+      document.addEventListener("mousemove", onMouseMove, { passive: false })
+      document.addEventListener("mouseup", onMouseUp)
+    }
+
+    resizer.addEventListener("mousedown", onMouseDown)
+
+    return () => {
+      resizer.removeEventListener("mousedown", onMouseDown)
+    }
+  }, [minWidth, sidebarCollapsed])
+
+  const initSplitResizer = useCallback(() => {
+    const splitResizer = document.getElementById("split-resizer")
+    const leftPane = leftPaneRef.current
+    const rightPane = rightPaneRef.current
+    const contentArea = contentAreaRef.current
+
+    if (!splitResizer || !leftPane || !rightPane || !contentArea || !splitView) return
+
+    const onMouseDown = (e: MouseEvent) => {
+      e.preventDefault()
+      isSplitResizingRef.current = true
+      document.body.classList.add("select-none")
+
+      // Запоминаем начальную позицию курсора и размеры контейнера
+      const startX = e.clientX
+      const containerWidth = contentArea.getBoundingClientRect().width
+      const startRatio = splitRatio
+
+      const onMouseMove = (e: MouseEvent) => {
+        if (!isSplitResizingRef.current) return
+
+        // Рассчитываем новое соотношение на основе смещения курсора
+        const deltaX = e.clientX - startX
+        const deltaRatio = (deltaX / containerWidth) * 100
+        const newRatio = Math.min(Math.max(startRatio + deltaRatio, minSplitWidth), 100 - minSplitWidth)
+
+        // Напрямую обновляем DOM без использования React состояния
+        leftPane.style.width = `${newRatio}%`
+        rightPane.style.width = `${100 - newRatio}%`
+        splitRatioRef.current = newRatio
+
+        // Предотвращаем выделение текста во время перетаскивания
+        e.preventDefault()
+      }
+
+      const onMouseUp = () => {
+        isSplitResizingRef.current = false
+        document.body.classList.remove("select-none")
+
+        // Обновляем React состояние только после завершения перетаскивания
+        setSplitRatio(splitRatioRef.current)
+
+        document.removeEventListener("mousemove", onMouseMove)
+        document.removeEventListener("mouseup", onMouseUp)
+      }
+
+      // Используем { passive: false } для предотвращения задержек в обработке событий
+      document.addEventListener("mousemove", onMouseMove, { passive: false })
+      document.addEventListener("mouseup", onMouseUp)
+    }
+
+    splitResizer.addEventListener("mousedown", onMouseDown)
+
+    return () => {
+      splitResizer.removeEventListener("mousedown", onMouseDown)
+    }
+  }, [splitView, splitRatio, minSplitWidth])
+
+  // Инициализация изменения размера
+  useLayoutEffect(() => {
+    return initResizer()
+  }, [initResizer])
+
+  // Инициализация изменения размера split view
+  useLayoutEffect(() => {
+    if (splitView) {
+      return initSplitResizer()
+    }
+  }, [initSplitResizer, splitView])
+
+  useEffect(() => {
+    const toolbar = toolbarRef.current
+    if (!toolbar) return
+
+    const gradientWidth = sidebarCollapsed ? collapsedWidth : sidebarWidth
+    const blurAmount = 20 // Размытие в пикселях
+    toolbar.style.background = `linear-gradient(to right, #1B1C1F 0%, #1B1C1F ${gradientWidth - blurAmount}px, #1E1F22 ${gradientWidth + blurAmount}px)`
+  }, [sidebarWidth, sidebarCollapsed, collapsedWidth])
+
+  const toggleSidebar = () => {
+    setSidebarCollapsed(!sidebarCollapsed)
+  }
 
   const handleFileClick = (fileId: string) => {
     const file = fileSystem.files.find((f) => f.id === fileId)
@@ -228,6 +389,7 @@ export default function Home() {
     setNewItemType("folder")
     setNewItemName("")
     setNewItemParentId(parentId)
+    setNewItemDialogOpen(true)
     setNewItemDialogOpen(true)
   }
 
@@ -455,7 +617,7 @@ export default function Home() {
 
     return (
       <div
-        className="flex items-center border-b border-gray-700 bg-[#3c3f41] overflow-x-auto h-9"
+        className="flex items-center border-b border-gray-700 bg-[#1E1F22] overflow-x-auto h-9"
         onDragOver={handleDragOver}
         onDrop={() => handleDrop(pane)}
       >
@@ -468,14 +630,17 @@ export default function Home() {
           return (
             <div
               key={fileId}
-              className={`flex items-center px-3 py-1 border-r border-gray-700 cursor-pointer ${
-                isActive ? "bg-[#4e5254]" : "hover:bg-[#3f4244]"
+              className={`flex items-center px-3 py-1 border-r border-gray-700 cursor-pointer h-full ${
+                isActive
+                  ? "bg-[#1E1F22] border-b-4 border-b-[#2E436E]"
+                  : "bg-[#1E1F22] hover:bg-[#3f4244] border-b-4 border-b-transparent"
               }`}
+              style={{ fontSize: "13px" }}
               onClick={() => setActiveFile(fileId)}
               draggable
               onDragStart={() => handleDragStart(pane, fileId)}
             >
-              <span className="text-sm">{file.name}</span>
+              <span className="truncate">{file.name}</span>
               <button className="ml-2 p-1 hover:bg-gray-600 rounded" onClick={(e) => handleCloseFile(pane, fileId, e)}>
                 <X className="h-3 w-3" />
               </button>
@@ -494,7 +659,7 @@ export default function Home() {
 
       return (
         <div key={folder.id} className="select-none">
-          <div className="flex items-center py-1 px-2 hover:bg-[#4b6eaf] cursor-pointer group">
+          <div className="flex items-center py-1 px-2 hover:bg-[#2E436E] cursor-pointer group">
             <div className="flex-grow flex items-center" onClick={() => toggleFolderOpen(folder.id)}>
               {folder.isOpen ? (
                 <ChevronDown className="h-4 w-4 mr-1 flex-shrink-0" />
@@ -546,8 +711,8 @@ export default function Home() {
               {childFiles.map((file) => (
                 <div
                   key={file.id}
-                  className={`flex items-center py-1 px-2 hover:bg-[#4b6eaf] cursor-pointer group ${
-                    leftActiveFile === file.id || rightActiveFile === file.id ? "bg-[#4b6eaf]" : ""
+                  className={`flex items-center py-1 px-2 hover:bg-[#2E436E] cursor-pointer group ${
+                    leftActiveFile === file.id || rightActiveFile === file.id ? "bg-[#2E436E]" : ""
                   }`}
                 >
                   <div className="flex-grow flex items-center" onClick={() => handleFileClick(file.id)}>
@@ -632,8 +797,8 @@ export default function Home() {
           searchResults.map((file) => (
             <div
               key={file.id}
-              className={`flex items-center py-1 px-2 hover:bg-[#4b6eaf] cursor-pointer group ${
-                leftActiveFile === file.id || rightActiveFile === file.id ? "bg-[#4b6eaf]" : ""
+              className={`flex items-center py-1 px-2 hover:bg-[#2E436E] cursor-pointer group ${
+                leftActiveFile === file.id || rightActiveFile === file.id ? "bg-[#2E436E]" : ""
               }`}
             >
               <div className="flex-grow flex items-center" onClick={() => handleFileClick(file.id)}>
@@ -681,26 +846,23 @@ export default function Home() {
       </div>
     )
   }
-
   return (
     <div className="flex flex-col h-screen bg-[#2b2b2b] text-gray-300 overflow-hidden">
       {/* Top toolbar */}
-      <div className="flex items-center justify-between bg-[#3c3f41] border-b border-gray-700 text-sm">
+      <div ref={toolbarRef} className="flex items-center border-b border-gray-700 text-sm h-10">
         <div className="flex items-center">
-          <button className="p-2 hover:bg-gray-600">
-            <Menu className="h-4 w-4" />
-          </button>
+          <div className="flex items-center px-2 py-1">
+            <div className="bg-yellow-500 text-black font-bold w-6 h-6 flex items-center justify-center rounded">
+              PV
+            </div>
+          </div>
 
-          <div className="flex items-center px-3 py-2 hover:bg-gray-600">
-            <span className="font-medium">PingVim</span>
+          <div className="flex items-center px-1.5 py-1 hover:bg-[#2E436E] cursor-pointer">
+            <span className="font-medium text-white">PingVim</span>
           </div>
         </div>
 
-        <div className="flex items-center">
-          <button className="p-2 hover:bg-gray-600">
-            <Search className="h-4 w-4" />
-          </button>
-
+        <div className="ml-auto flex items-center">
           <button ref={settingsButtonRef} className="p-2 hover:bg-gray-600" onClick={toggleSettingsMenu}>
             <Settings className="h-4 w-4" />
           </button>
@@ -708,23 +870,26 @@ export default function Home() {
           <button className="p-2 hover:bg-gray-600">
             <User className="h-4 w-4" />
           </button>
-
-          <button className="p-2 hover:bg-gray-600">
-            <X className="h-4 w-4" />
-          </button>
         </div>
       </div>
 
       <div className="flex flex-1 overflow-hidden">
         {/* Left sidebar - Project explorer */}
-        <div className="w-64 border-r border-gray-700 flex flex-col">
-          <div className="h-9 flex items-center justify-between border-b border-gray-700 bg-[#3c3f41] px-2">
-            <div className="flex items-center flex-1 mr-2">
+        <div
+          ref={sidebarRef}
+          className={`border-r border-gray-700 flex flex-col ease-in-out bg-[#1B1C1F]`}
+          style={{
+            width: sidebarCollapsed ? `${collapsedWidth}px` : `${sidebarWidth}px`,
+            minWidth: sidebarCollapsed ? `${collapsedWidth}px` : `${minWidth}px`,
+          }}
+        >
+          <div className="h-9 flex items-center justify-between border-b border-gray-700 bg-[#1B1C1F] px-2">
+            <div className={`flex items-center flex-1 mr-2 ${sidebarCollapsed ? "hidden" : ""}`}>
               <Search className="h-4 w-4 mr-2 text-gray-400 flex-shrink-0" />
               <input
                 type="text"
                 placeholder="Search files..."
-                className="bg-[#2b2b2b] text-sm border-none outline-none focus:ring-0 w-full h-6 px-2 text-gray-300"
+                className="bg-[#2b2b2b] text-sm border-none outline-none focus:ring-0 w-full h-6 px-2 text-gray-300 rounded-md"
                 value={searchTerm}
                 onChange={(e) => {
                   const term = e.target.value
@@ -742,24 +907,35 @@ export default function Home() {
                 }}
               />
             </div>
-            <div className="flex items-center space-x-1">
-              <button className="p-1 hover:bg-gray-600 rounded">
-                <MoreVertical className="h-4 w-4" />
+            <div className={`flex items-center ${sidebarCollapsed ? "w-full justify-center" : "space-x-1"}`}>
+              <button
+                className="p-1 hover:bg-gray-600 rounded"
+                onClick={toggleSidebar}
+                title={sidebarCollapsed ? "Развернуть панель" : "Свернуть панель"}
+              >
+                {sidebarCollapsed ? <ChevronRightIcon className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
               </button>
             </div>
           </div>
 
-          <div className="flex-1 overflow-auto">
+          <div className={`flex-1 overflow-auto bg-[#1B1C1F] ${sidebarCollapsed ? "hidden" : ""}`}>
             {searchTerm.trim() !== "" ? renderSearchResults() : renderFileExplorer()}
           </div>
         </div>
 
+        {/* Добавить элемент для изменения размера */}
+        <div id="sidebar-resizer" className="w-[2px] cursor-col-resize hover:bg-gray-500 active:bg-gray-400 z-10" />
+
         {/* Main content area */}
-        <div className="flex-1 flex flex-col">
+        <div ref={contentAreaRef} className="flex-1 flex flex-col">
           {/* Split view container */}
           <div className="flex flex-1 overflow-hidden">
             {/* Left pane */}
-            <div className={`flex flex-col ${splitView ? "w-1/2 border-r border-gray-700" : "w-full"}`}>
+            <div
+              ref={leftPaneRef}
+              className="flex flex-col border-r border-gray-700"
+              style={{ width: splitView ? `${splitRatio}%` : "100%" }}
+            >
               {/* Left pane tabs */}
               {renderFileTabs("left")}
 
@@ -773,16 +949,21 @@ export default function Home() {
                     fontSize={fontSize}
                   />
                 ) : (
-                  <div className="flex items-center justify-center h-full text-gray-500">
+                  <div className="flex items-center justify-center h-full text-gray-500 bg-[#1E1F22]">
                     <p>Select a file to edit</p>
                   </div>
                 )}
               </div>
             </div>
 
+            {/* Split resizer (only shown in split view) */}
+            {splitView && (
+              <div id="split-resizer" className="w-[2px] cursor-col-resize hover:bg-gray-500 active:bg-gray-400 z-10" />
+            )}
+
             {/* Right pane (only shown in split view) */}
             {splitView && (
-              <div className="flex flex-col w-1/2">
+              <div ref={rightPaneRef} className="flex flex-col" style={{ width: `${100 - splitRatio}%` }}>
                 {/* Right pane tabs */}
                 {renderFileTabs("right")}
 
@@ -796,7 +977,7 @@ export default function Home() {
                       fontSize={fontSize}
                     />
                   ) : (
-                    <div className="flex items-center justify-center h-full text-gray-500">
+                    <div className="flex items-center justify-center h-full text-gray-500 bg-[#1E1F22]">
                       <p>Select a file to edit</p>
                     </div>
                   )}
@@ -821,7 +1002,7 @@ export default function Home() {
 
       {/* New Item Dialog */}
       <Dialog open={newItemDialogOpen} onOpenChange={setNewItemDialogOpen}>
-        <DialogContent className="bg-[#3c3f41] border-gray-700 text-gray-300 p-0">
+        <DialogContent className="bg-[#1B1C1F] border-gray-700 text-gray-300 p-0">
           <DialogHeader className="p-4 border-b border-gray-700">
             <DialogTitle>New {newItemType === "file" ? "File" : "Folder"}</DialogTitle>
           </DialogHeader>
@@ -834,7 +1015,7 @@ export default function Home() {
               className="bg-[#2b2b2b] border-gray-700 text-gray-300"
             />
           </div>
-          <DialogFooter className="p-4 border-t border-gray-700 bg-[#3c3f41]">
+          <DialogFooter className="p-4 border-t border-gray-700 bg-[#1B1C1F]">
             <Button
               variant="outline"
               onClick={() => setNewItemDialogOpen(false)}
@@ -842,7 +1023,7 @@ export default function Home() {
             >
               Cancel
             </Button>
-            <Button onClick={createNewItem} className="bg-[#4b6eaf] text-white hover:bg-[#5a7dbf]">
+            <Button onClick={createNewItem} className="bg-[#2E436E] text-white hover:bg-[#3A5488]">
               Create
             </Button>
           </DialogFooter>
@@ -851,7 +1032,7 @@ export default function Home() {
 
       {/* Rename Dialog */}
       <Dialog open={renameDialogOpen} onOpenChange={setRenameDialogOpen}>
-        <DialogContent className="bg-[#3c3f41] border-gray-700 text-gray-300 p-0">
+        <DialogContent className="bg-[#1B1C1F] border-gray-700 text-gray-300 p-0">
           <DialogHeader className="p-4 border-b border-gray-700">
             <DialogTitle>Rename {itemToRename?.type === "file" ? "File" : "Folder"}</DialogTitle>
           </DialogHeader>
@@ -864,7 +1045,7 @@ export default function Home() {
               className="bg-[#2b2b2b] border-gray-700 text-gray-300"
             />
           </div>
-          <DialogFooter className="p-4 border-t border-gray-700 bg-[#3c3f41]">
+          <DialogFooter className="p-4 border-t border-gray-700 bg-[#1B1C1F]">
             <Button
               variant="outline"
               onClick={() => setRenameDialogOpen(false)}
@@ -872,7 +1053,7 @@ export default function Home() {
             >
               Cancel
             </Button>
-            <Button onClick={renameItem} className="bg-[#4b6eaf] text-white hover:bg-[#5a7dbf]">
+            <Button onClick={renameItem} className="bg-[#2E436E] text-white hover:bg-[#3A5488]">
               Rename
             </Button>
           </DialogFooter>
@@ -881,7 +1062,7 @@ export default function Home() {
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
-        <DialogContent className="bg-[#3c3f41] border-gray-700 text-gray-300 p-0">
+        <DialogContent className="bg-[#1B1C1F] border-gray-700 text-gray-300 p-0">
           <DialogHeader className="p-4 border-b border-gray-700">
             <DialogTitle>Confirm Delete</DialogTitle>
           </DialogHeader>
@@ -891,7 +1072,7 @@ export default function Home() {
               <p className="text-red-400 mt-2">Warning: This will delete all files and folders inside.</p>
             )}
           </div>
-          <DialogFooter className="p-4 border-t border-gray-700 bg-[#3c3f41]">
+          <DialogFooter className="p-4 border-t border-gray-700 bg-[#1B1C1F]">
             <Button
               variant="outline"
               onClick={() => setDeleteConfirmOpen(false)}
