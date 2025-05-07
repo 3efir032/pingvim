@@ -34,12 +34,63 @@ export default function Home() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [authChecked, setAuthChecked] = useState(false)
 
+  // Состояние для диалога смены пароля
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false)
+  const [newPassword, setNewPassword] = useState("")
+  const [confirmPassword, setConfirmPassword] = useState("")
+  const [passwordError, setPasswordError] = useState("")
+  const [oldPassword, setOldPassword] = useState("")
+  const [disablePassword, setDisablePassword] = useState(false)
+
   // Проверяем авторизацию при загрузке страницы
   useEffect(() => {
     const auth = localStorage.getItem("pycharm-auth")
     setIsAuthenticated(auth === "true")
     setAuthChecked(true)
   }, [])
+
+  // Функция для смены пароля
+  const handleChangePassword = () => {
+    // Получаем текущий пароль из localStorage или используем дефолтный
+    const currentPassword = localStorage.getItem("pycharm-password") || "111"
+
+    // Проверяем старый пароль
+    if (oldPassword !== currentPassword) {
+      setPasswordError("Неверный текущий пароль")
+      return
+    }
+
+    // Если выбрано отключение пароля
+    if (disablePassword) {
+      localStorage.removeItem("pycharm-password")
+      setPasswordError("")
+      setOldPassword("")
+      setNewPassword("")
+      setConfirmPassword("")
+      setDisablePassword(false)
+      setChangePasswordOpen(false)
+      return
+    }
+
+    if (!newPassword) {
+      setPasswordError("Пароль не может быть пустым")
+      return
+    }
+
+    if (newPassword !== confirmPassword) {
+      setPasswordError("Пароли не совпадают")
+      return
+    }
+
+    // Сохраняем новый пароль
+    localStorage.setItem("pycharm-password", newPassword)
+    setPasswordError("")
+    setOldPassword("")
+    setNewPassword("")
+    setConfirmPassword("")
+    setDisablePassword(false)
+    setChangePasswordOpen(false)
+  }
 
   // Track open files for left pane
   const [leftPaneFiles, setLeftPaneFiles] = useLocalStorage<string[]>("pycharm-left-pane-files", [])
@@ -978,7 +1029,8 @@ export default function Home() {
 
   // Если пользователь не авторизован, показываем страницу авторизации
   if (!isAuthenticated) {
-    return <AuthPage onAuth={(success) => setIsAuthenticated(success)} defaultPassword="111" />
+    const savedPassword = localStorage.getItem("pycharm-password") || "111"
+    return <AuthPage onAuth={(success) => setIsAuthenticated(success)} defaultPassword={savedPassword} />
   }
 
   return (
@@ -999,6 +1051,9 @@ export default function Home() {
 
         <div className="ml-auto flex items-center">
           <input type="file" ref={fileInputRef} className="hidden" accept=".json" onChange={importData} />
+          <button className="p-2 hover:bg-gray-600" onClick={() => setChangePasswordOpen(true)} title="Сменить пароль">
+            <User className="h-4 w-4" />
+          </button>
           <button
             className="p-2 hover:bg-gray-600"
             onClick={() => setSettingsOpen(!settingsOpen)}
@@ -1016,7 +1071,7 @@ export default function Home() {
             }}
             title="Заблокировать редактор"
           >
-            <User className="h-4 w-4" />
+            <X className="h-4 w-4" />
           </button>
         </div>
       </div>
@@ -1184,6 +1239,88 @@ export default function Home() {
           </div>
         </div>
       )}
+
+      {/* Change Password Dialog */}
+      <Dialog open={changePasswordOpen} onOpenChange={setChangePasswordOpen}>
+        <DialogContent className="bg-[#1B1C1F] border-gray-700 text-gray-300 p-0">
+          <DialogHeader className="p-4 border-b border-gray-700">
+            <DialogTitle>Сменить пароль</DialogTitle>
+          </DialogHeader>
+          <div className="p-4 space-y-4">
+            <div>
+              <label className="text-sm text-gray-400 mb-1 block">Текущий пароль</label>
+              <Input
+                type="password"
+                value={oldPassword}
+                onChange={(e) => setOldPassword(e.target.value)}
+                placeholder="Введите текущий пароль"
+                autoFocus
+                className="bg-[#2b2b2b] border-gray-700 text-gray-300"
+              />
+            </div>
+            <div className={disablePassword ? "opacity-50" : ""}>
+              <label className="text-sm text-gray-400 mb-1 block">Новый пароль</label>
+              <Input
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="Введите новый пароль"
+                disabled={disablePassword}
+                className="bg-[#2b2b2b] border-gray-700 text-gray-300"
+              />
+            </div>
+            <div className={disablePassword ? "opacity-50" : ""}>
+              <label className="text-sm text-gray-400 mb-1 block">Подтвердите пароль</label>
+              <Input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="Повторите новый пароль"
+                disabled={disablePassword}
+                className="bg-[#2b2b2b] border-gray-700 text-gray-300"
+              />
+            </div>
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="disable-password"
+                checked={disablePassword}
+                onChange={(e) => {
+                  setDisablePassword(e.target.checked)
+                  if (e.target.checked) {
+                    setNewPassword("")
+                    setConfirmPassword("")
+                  }
+                }}
+                className="rounded bg-[#2b2b2b] border-gray-700 text-[#2E436E] focus:ring-[#2E436E]"
+              />
+              <label htmlFor="disable-password" className="text-sm text-gray-300">
+                Отключить защиту паролем
+              </label>
+            </div>
+            {passwordError && <p className="text-red-500 text-sm">{passwordError}</p>}
+          </div>
+          <DialogFooter className="p-4 border-t border-gray-700 bg-[#1B1C1F]">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setChangePasswordOpen(false)
+                setOldPassword("")
+                setNewPassword("")
+                setConfirmPassword("")
+                setPasswordError("")
+                setDisablePassword(false)
+              }}
+              className="bg-[#4b4b4b] text-gray-300 border-gray-700 hover:bg-[#5a5a5a]"
+            >
+              Отмена
+            </Button>
+            <Button onClick={handleChangePassword} className="bg-[#2E436E] text-white hover:bg-[#3A5488]">
+              {disablePassword ? "Отключить пароль" : "Сохранить"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* New Item Dialog */}
       <Dialog open={newItemDialogOpen} onOpenChange={setNewItemDialogOpen}>
