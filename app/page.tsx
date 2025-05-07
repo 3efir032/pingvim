@@ -331,47 +331,62 @@ export default function Home() {
     setRightActiveFile(fileId)
   }
 
+  // Найдите функцию handleCloseFile и замените её на следующую реализацию:
+
   const handleCloseFile = (pane: "left" | "right", fileId: string, e?: React.MouseEvent) => {
     e?.stopPropagation()
 
     if (pane === "left") {
-      // Remove from left pane files
-      setLeftPaneFiles((prev) => prev.filter((id) => id !== fileId))
+      // Получаем оставшиеся файлы после удаления текущего
+      const remainingFiles = leftPaneFiles.filter((id) => id !== fileId)
 
-      // If this was the active file, set a new active file
+      // Проверяем, был ли это активный файл
       if (leftActiveFile === fileId) {
-        const remainingFiles = leftPaneFiles.filter((id) => id !== fileId)
-
-        // Если в левой панели не осталось файлов, но есть файлы в правой панели
+        // Если в левой панели не осталось файлов, но есть файлы в правой панели и включен режим split view
         if (remainingFiles.length === 0 && rightPaneFiles.length > 0 && splitView) {
-          // Перемещаем файлы из правой панели в левую
-          setLeftPaneFiles(rightPaneFiles)
-          setLeftActiveFile(rightActiveFile)
+          // Сначала сохраняем файлы из правой панели и активный файл
+          const filesToMove = [...rightPaneFiles]
+          const activeFileToMove = rightActiveFile
 
-          // Очищаем правую панель
+          // Затем обновляем состояния в определенном порядке
+          // 1. Обновляем левую панель
+          setLeftPaneFiles(filesToMove)
+          setLeftActiveFile(activeFileToMove)
+
+          // 2. Очищаем правую панель
           setRightPaneFiles([])
           setRightActiveFile(null)
 
-          // Отключаем режим split view
-          setSplitView(false)
+          // 3. Отключаем режим split view
+          setTimeout(() => {
+            setSplitView(false)
+          }, 0)
         } else {
           // Обычное поведение - устанавливаем новый активный файл
+          setLeftPaneFiles(remainingFiles)
           setLeftActiveFile(remainingFiles.length > 0 ? remainingFiles[remainingFiles.length - 1] : null)
         }
+      } else {
+        // Если это не активный файл, просто удаляем его из списка
+        setLeftPaneFiles(remainingFiles)
       }
     } else {
-      // Remove from right pane files
-      setRightPaneFiles((prev) => prev.filter((id) => id !== fileId))
+      // Получаем оставшиеся файлы после удаления текущего
+      const remainingFiles = rightPaneFiles.filter((id) => id !== fileId)
 
-      // If this was the active file, set a new active file
+      // Проверяем, был ли это активный файл
       if (rightActiveFile === fileId) {
-        const remainingFiles = rightPaneFiles.filter((id) => id !== fileId)
+        setRightPaneFiles(remainingFiles)
         setRightActiveFile(remainingFiles.length > 0 ? remainingFiles[remainingFiles.length - 1] : null)
+      } else {
+        setRightPaneFiles(remainingFiles)
       }
 
-      // If right pane is now empty, disable split view
-      if (rightPaneFiles.length <= 1 && rightPaneFiles.includes(fileId)) {
-        setSplitView(false)
+      // Если правая панель теперь пуста, отключаем режим split view
+      if (remainingFiles.length === 0) {
+        setTimeout(() => {
+          setSplitView(false)
+        }, 0)
       }
     }
   }
