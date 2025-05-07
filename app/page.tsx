@@ -23,7 +23,6 @@ import {
 import { useLocalStorage } from "@/hooks/use-local-storage"
 import Editor from "@/components/editor"
 import StatusBar from "@/components/status-bar"
-import SettingsMenu from "@/components/settings-menu"
 import type { FileType, FolderType } from "@/types/file-system"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
@@ -342,7 +341,23 @@ export default function Home() {
       // If this was the active file, set a new active file
       if (leftActiveFile === fileId) {
         const remainingFiles = leftPaneFiles.filter((id) => id !== fileId)
-        setLeftActiveFile(remainingFiles.length > 0 ? remainingFiles[remainingFiles.length - 1] : null)
+
+        // Если в левой панели не осталось файлов, но есть файлы в правой панели
+        if (remainingFiles.length === 0 && rightPaneFiles.length > 0 && splitView) {
+          // Перемещаем файлы из правой панели в левую
+          setLeftPaneFiles(rightPaneFiles)
+          setLeftActiveFile(rightActiveFile)
+
+          // Очищаем правую панель
+          setRightPaneFiles([])
+          setRightActiveFile(null)
+
+          // Отключаем режим split view
+          setSplitView(false)
+        } else {
+          // Обычное поведение - устанавливаем новый активный файл
+          setLeftActiveFile(remainingFiles.length > 0 ? remainingFiles[remainingFiles.length - 1] : null)
+        }
       }
     } else {
       // Remove from right pane files
@@ -944,7 +959,11 @@ export default function Home() {
 
         <div className="ml-auto flex items-center">
           <input type="file" ref={fileInputRef} className="hidden" accept=".json" onChange={importData} />
-          <button ref={settingsButtonRef} className="p-2 hover:bg-gray-600" onClick={toggleSettingsMenu}>
+          <button
+            className="p-2 hover:bg-gray-600"
+            onClick={() => setSettingsOpen(!settingsOpen)}
+            ref={settingsButtonRef}
+          >
             <Settings className="h-4 w-4" />
           </button>
           <button className="p-2 hover:bg-gray-600">
@@ -1045,7 +1064,7 @@ export default function Home() {
                 id="split-resizer"
                 className="w-[2px] cursor-col-resize hover:bg-gray-500 active:bg-gray-400 z-10"
                 style={{
-                  background: "linear-gradient(to right, #1B1C1F 0%, #1E1F22 100%)",
+                  background: "#1E1F22",
                   opacity: 0.8,
                 }}
               />
@@ -1082,13 +1101,40 @@ export default function Home() {
       <StatusBar />
 
       {/* Settings Menu */}
-      <SettingsMenu
-        open={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
-        fontSize={fontSize}
-        onFontSizeChange={setFontSize}
-        anchorEl={settingsButtonRef.current}
-      />
+      {settingsOpen && (
+        <div
+          className="fixed z-50 bg-[#1B1C1F] border border-gray-700 p-3 rounded-md w-64"
+          style={{
+            top: settingsButtonRef.current ? settingsButtonRef.current.getBoundingClientRect().bottom + 5 : 0,
+            right: settingsButtonRef.current
+              ? window.innerWidth - settingsButtonRef.current.getBoundingClientRect().right
+              : 0,
+            fontSize: "13px",
+            boxShadow: "0 0 10px rgba(0, 0, 0, 0.5), 0 5px 15px rgba(0, 0, 0, 0.3)",
+          }}
+        >
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">Font Size: {fontSize}px</span>
+              </div>
+              <div className="mt-2">
+                <input
+                  type="range"
+                  min="8"
+                  max="30"
+                  value={fontSize}
+                  onChange={(e) => setFontSize(Number.parseInt(e.target.value))}
+                  className="w-full h-2 bg-[#2b2b2b] rounded-lg appearance-none cursor-pointer"
+                  style={{
+                    accentColor: "#2E436E",
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* New Item Dialog */}
       <Dialog open={newItemDialogOpen} onOpenChange={setNewItemDialogOpen}>

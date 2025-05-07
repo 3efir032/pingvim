@@ -9,7 +9,7 @@ export default function StatusBar() {
 
       <div className="flex items-center space-x-4">
         <span>Demo</span>
-        <span>Version: v75</span>
+        <span>Version: v84</span>
       </div>
     </div>
   )
