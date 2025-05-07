@@ -138,6 +138,33 @@ export default function Home() {
     }
   }, [rightPaneFiles, splitView, setSplitView])
 
+  // Отслеживаем изменения в leftPaneFiles
+  useEffect(() => {
+    // Если в левой панели нет файлов, но есть файлы в правой панели и включен режим split view
+    if (leftPaneFiles.length === 0 && rightPaneFiles.length > 0 && splitView) {
+      // Перемещаем файлы из правой панели в левую
+      setLeftPaneFiles([...rightPaneFiles])
+      setLeftActiveFile(rightActiveFile)
+
+      // Очищаем правую панель
+      setRightPaneFiles([])
+      setRightActiveFile(null)
+
+      // Отключаем режим split view
+      setSplitView(false)
+    }
+  }, [
+    leftPaneFiles,
+    rightPaneFiles,
+    splitView,
+    rightActiveFile,
+    setLeftPaneFiles,
+    setLeftActiveFile,
+    setRightPaneFiles,
+    setRightActiveFile,
+    setSplitView,
+  ])
+
   const initResizer = useCallback(() => {
     const resizer = document.getElementById("sidebar-resizer")
     const sidebar = sidebarRef.current
@@ -331,62 +358,37 @@ export default function Home() {
     setRightActiveFile(fileId)
   }
 
-  // Найдите функцию handleCloseFile и замените её на следующую реализацию:
-
   const handleCloseFile = (pane: "left" | "right", fileId: string, e?: React.MouseEvent) => {
     e?.stopPropagation()
 
     if (pane === "left") {
-      // Получаем оставшиеся файлы после удаления текущего
-      const remainingFiles = leftPaneFiles.filter((id) => id !== fileId)
+      // Удаляем файл из левой панели
+      setLeftPaneFiles((prev) => {
+        const newFiles = prev.filter((id) => id !== fileId)
+        return newFiles
+      })
 
-      // Проверяем, был ли это активный файл
+      // Если это был активный файл, устанавливаем новый активный файл
       if (leftActiveFile === fileId) {
-        // Если в левой панели не осталось файлов, но есть файлы в правой панели и включен режим split view
-        if (remainingFiles.length === 0 && rightPaneFiles.length > 0 && splitView) {
-          // Сначала сохраняем файлы из правой панели и активный файл
-          const filesToMove = [...rightPaneFiles]
-          const activeFileToMove = rightActiveFile
-
-          // Затем обновляем состояния в определенном порядке
-          // 1. Обновляем левую панель
-          setLeftPaneFiles(filesToMove)
-          setLeftActiveFile(activeFileToMove)
-
-          // 2. Очищаем правую панель
-          setRightPaneFiles([])
-          setRightActiveFile(null)
-
-          // 3. Отключаем режим split view
-          setTimeout(() => {
-            setSplitView(false)
-          }, 0)
-        } else {
-          // Обычное поведение - устанавливаем новый активный файл
-          setLeftPaneFiles(remainingFiles)
-          setLeftActiveFile(remainingFiles.length > 0 ? remainingFiles[remainingFiles.length - 1] : null)
-        }
-      } else {
-        // Если это не активный файл, просто удаляем его из списка
-        setLeftPaneFiles(remainingFiles)
+        const remainingFiles = leftPaneFiles.filter((id) => id !== fileId)
+        setLeftActiveFile(remainingFiles.length > 0 ? remainingFiles[remainingFiles.length - 1] : null)
       }
     } else {
-      // Получаем оставшиеся файлы после удаления текущего
-      const remainingFiles = rightPaneFiles.filter((id) => id !== fileId)
+      // Удаляем файл из правой панели
+      setRightPaneFiles((prev) => {
+        const newFiles = prev.filter((id) => id !== fileId)
+        return newFiles
+      })
 
-      // Проверяем, был ли это активный файл
+      // Если это был активный файл, устанавливаем новый активный файл
       if (rightActiveFile === fileId) {
-        setRightPaneFiles(remainingFiles)
+        const remainingFiles = rightPaneFiles.filter((id) => id !== fileId)
         setRightActiveFile(remainingFiles.length > 0 ? remainingFiles[remainingFiles.length - 1] : null)
-      } else {
-        setRightPaneFiles(remainingFiles)
       }
 
       // Если правая панель теперь пуста, отключаем режим split view
-      if (remainingFiles.length === 0) {
-        setTimeout(() => {
-          setSplitView(false)
-        }, 0)
+      if (rightPaneFiles.length === 1 && rightPaneFiles[0] === fileId) {
+        setSplitView(false)
       }
     }
   }
@@ -1079,7 +1081,7 @@ export default function Home() {
                 id="split-resizer"
                 className="w-[2px] cursor-col-resize hover:bg-gray-500 active:bg-gray-400 z-10"
                 style={{
-                  background: "#1E1F22",
+                  background: "#EAB308",
                   opacity: 0.8,
                 }}
               />
