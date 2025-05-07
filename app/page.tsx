@@ -23,12 +23,24 @@ import {
 import { useLocalStorage } from "@/hooks/use-local-storage"
 import Editor from "@/components/editor"
 import StatusBar from "@/components/status-bar"
+import AuthPage from "@/components/auth-page"
 import type { FileType, FolderType } from "@/types/file-system"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 
 export default function Home() {
+  // Состояние авторизации
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [authChecked, setAuthChecked] = useState(false)
+
+  // Проверяем авторизацию при загрузке страницы
+  useEffect(() => {
+    const auth = localStorage.getItem("pycharm-auth")
+    setIsAuthenticated(auth === "true")
+    setAuthChecked(true)
+  }, [])
+
   // Track open files for left pane
   const [leftPaneFiles, setLeftPaneFiles] = useLocalStorage<string[]>("pycharm-left-pane-files", [])
   // Track open files for right pane
@@ -958,6 +970,17 @@ export default function Home() {
       </div>
     )
   }
+
+  // Если проверка авторизации еще не выполнена, показываем пустой экран
+  if (!authChecked) {
+    return null
+  }
+
+  // Если пользователь не авторизован, показываем страницу авторизации
+  if (!isAuthenticated) {
+    return <AuthPage onAuth={(success) => setIsAuthenticated(success)} defaultPassword="111" />
+  }
+
   return (
     <div className="flex flex-col h-screen bg-[#2b2b2b] text-gray-300 overflow-hidden">
       {/* Top toolbar */}
@@ -983,7 +1006,16 @@ export default function Home() {
           >
             <Settings className="h-4 w-4" />
           </button>
-          <button className="p-2 hover:bg-gray-600">
+          <button
+            className="p-2 hover:bg-gray-600"
+            onClick={() => {
+              // Удаляем состояние авторизации из localStorage
+              localStorage.removeItem("pycharm-auth")
+              // Устанавливаем состояние isAuthenticated в false
+              setIsAuthenticated(false)
+            }}
+            title="Заблокировать редактор"
+          >
             <User className="h-4 w-4" />
           </button>
         </div>
@@ -1081,7 +1113,7 @@ export default function Home() {
                 id="split-resizer"
                 className="w-[2px] cursor-col-resize hover:bg-gray-500 active:bg-gray-400 z-10"
                 style={{
-                  background: "#EAB308",
+                  background: "#1E1F22",
                   opacity: 0.8,
                 }}
               />
