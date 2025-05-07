@@ -17,6 +17,8 @@ import {
   ChevronLeft,
   ChevronRightIcon,
   X,
+  Download,
+  Upload,
 } from "lucide-react"
 import { useLocalStorage } from "@/hooks/use-local-storage"
 import Editor from "@/components/editor"
@@ -128,6 +130,7 @@ export default function Home() {
 
   // После других useRef
   const toolbarRef = useRef<HTMLDivElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Enable split view if there are files in the right pane
   useEffect(() => {
@@ -528,6 +531,85 @@ export default function Home() {
     }))
   }
 
+  const exportData = () => {
+    try {
+      // Создаем объект с текущими данными и метаданными
+      const exportData = {
+        version: "1.0",
+        timestamp: new Date().toISOString(),
+        data: fileSystem,
+      }
+
+      // Преобразуем данные в JSON-строку
+      const jsonString = JSON.stringify(exportData, null, 2)
+
+      // Создаем Blob с данными
+      const blob = new Blob([jsonString], { type: "application/json" })
+
+      // Создаем URL для скачивания
+      const url = URL.createObjectURL(blob)
+
+      // Создаем временную ссылку для скачивания
+      const link = document.createElement("a")
+      link.href = url
+      link.download = `pingvim-data-${new Date().toISOString().slice(0, 10)}.json`
+
+      // Добавляем ссылку в DOM, кликаем по ней и удаляем
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+
+      // Освобождаем URL
+      URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error("Ошибка при экспорте данных:", error)
+      alert("Произошла ошибка при экспорте данных")
+    }
+  }
+
+  const importData = (event: React.ChangeEvent<HTMLInputElement>) => {
+    try {
+      const file = event.target.files?.[0]
+      if (!file) return
+
+      const reader = new FileReader()
+
+      reader.onload = (e) => {
+        try {
+          const content = e.target?.result as string
+          const importedData = JSON.parse(content)
+
+          // Проверяем структуру данных
+          if (importedData.data && Array.isArray(importedData.data.folders) && Array.isArray(importedData.data.files)) {
+            // Обновляем состояние fileSystem
+            setFileSystem(importedData.data)
+
+            // Сбрасываем открытые файлы, так как их ID могут не совпадать
+            setLeftPaneFiles([])
+            setRightPaneFiles([])
+            setLeftActiveFile(null)
+            setRightActiveFile(null)
+
+            alert("Данные успешно импортированы")
+          } else {
+            throw new Error("Неверный формат данных")
+          }
+        } catch (parseError) {
+          console.error("Ошибка при парсинге файла:", parseError)
+          alert("Не удалось прочитать файл. Убедитесь, что это корректный JSON-файл с данными PingVim")
+        }
+      }
+
+      reader.readAsText(file)
+
+      // Сбрасываем значение input, чтобы можно было загрузить тот же файл повторно
+      event.target.value = ""
+    } catch (error) {
+      console.error("Ошибка при импорте данных:", error)
+      alert("Произошла ошибка при импорте данных")
+    }
+  }
+
   // Toggle settings menu
   const toggleSettingsMenu = () => {
     setSettingsOpen((prev) => !prev)
@@ -758,6 +840,16 @@ export default function Home() {
           <div className="flex space-x-1">
             <button
               className="p-1 hover:bg-gray-600 rounded"
+              onClick={() => fileInputRef.current?.click()}
+              title="Импорт данных"
+            >
+              <Upload className="h-3 w-3" />
+            </button>
+            <button className="p-1 hover:bg-gray-600 rounded" onClick={exportData} title="Экспорт данных">
+              <Download className="h-3 w-3" />
+            </button>
+            <button
+              className="p-1 hover:bg-gray-600 rounded"
               onClick={() => openNewFolderDialog(rootFolders[0]?.id || "")}
               title="New Folder"
             >
@@ -851,10 +943,10 @@ export default function Home() {
         </div>
 
         <div className="ml-auto flex items-center">
+          <input type="file" ref={fileInputRef} className="hidden" accept=".json" onChange={importData} />
           <button ref={settingsButtonRef} className="p-2 hover:bg-gray-600" onClick={toggleSettingsMenu}>
             <Settings className="h-4 w-4" />
           </button>
-
           <button className="p-2 hover:bg-gray-600">
             <User className="h-4 w-4" />
           </button>
