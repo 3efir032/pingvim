@@ -245,58 +245,89 @@ export default function Home() {
     setSplitView,
   ])
 
-  const initResizer = useCallback(() => {
-    const resizer = document.getElementById("sidebar-resizer")
-    const sidebar = sidebarRef.current
-    const toolbar = toolbarRef.current
+  // Найдем и заменим функцию initResizer и соответствующий useLayoutEffect
 
-    if (!resizer || !sidebar || !toolbar) return
+  // Заменим функцию initResizer на следующую:
+  // Удалите существующую функцию initResizer и useEffect, связанный с ней
 
-    const onMouseDown = (e: MouseEvent) => {
-      e.preventDefault()
-      isResizingRef.current = true
-      document.body.classList.add("select-none")
+  // Добавьте этот новый useEffect сразу после объявления всех useRef
+  useEffect(() => {
+    // Функция для инициализации обработчика изменения размера
+    const setupResizer = () => {
+      const sidebar = sidebarRef.current
+      const resizer = document.getElementById("sidebar-resizer")
 
-      // Запоминаем начальную позицию курсора
-      const startX = e.clientX
-      const startWidth = sidebar.getBoundingClientRect().width
+      if (!sidebar || !resizer) {
+        // Если элементы еще не доступны, пробуем снова через небольшую задержку
+        return setTimeout(setupResizer, 100)
+      }
 
-      const onMouseMove = (e: MouseEvent) => {
-        if (!isResizingRef.current || sidebarCollapsed) return
+      let isResizing = false
+      let startX = 0
+      let startWidth = 0
 
-        // Рассчитываем новую ширину на основе смещения курсора
+      const handleMouseDown = (e: MouseEvent) => {
+        if (sidebarCollapsed) return
+
+        e.preventDefault()
+        isResizing = true
+        startX = e.clientX
+        startWidth = sidebar.getBoundingClientRect().width
+        document.body.classList.add("select-none")
+
+        document.addEventListener("mousemove", handleMouseMove)
+        document.addEventListener("mouseup", handleMouseUp)
+      }
+
+      const handleMouseMove = (e: MouseEvent) => {
+        if (!isResizing) return
+
         const newWidth = Math.max(startWidth + (e.clientX - startX), minWidth)
-
-        // Напрямую обновляем DOM без использования React состояния
         sidebar.style.width = `${newWidth}px`
         sidebarWidthRef.current = newWidth
-
-        // Предотвращаем выделение текста во время перетаскивания
-        e.preventDefault()
       }
 
-      const onMouseUp = () => {
-        isResizingRef.current = false
-        document.body.classList.remove("select-none")
+      const handleMouseUp = () => {
+        if (!isResizing) return
 
-        // Обновляем React состояние только после завершения перетаскивания
+        isResizing = false
+        document.body.classList.remove("select-none")
         setSidebarWidth(sidebarWidthRef.current)
 
-        document.removeEventListener("mousemove", onMouseMove)
-        document.removeEventListener("mouseup", onMouseUp)
+        document.removeEventListener("mousemove", handleMouseMove)
+        document.removeEventListener("mouseup", handleMouseUp)
       }
 
-      // Используем { passive: false } для предотвращения задержек в обработке событий
-      document.addEventListener("mousemove", onMouseMove, { passive: false })
-      document.addEventListener("mouseup", onMouseUp)
+      // Очищаем предыдущие обработчики, если они есть
+      resizer.removeEventListener("mousedown", handleMouseDown)
+
+      // Добавляем новый обработчик
+      resizer.addEventListener("mousedown", handleMouseDown)
+
+      // Возвращаем функцию очистки
+      return () => {
+        resizer.removeEventListener("mousedown", handleMouseDown)
+        document.removeEventListener("mousemove", handleMouseMove)
+        document.removeEventListener("mouseup", handleMouseUp)
+      }
     }
 
-    resizer.addEventListener("mousedown", onMouseDown)
+    // Запускаем настройку обработчика
+    const cleanup = setupResizer()
+
+    // Обновляем ширину сайдбара в DOM напрямую при изменении состояния
+    if (sidebarRef.current) {
+      sidebarRef.current.style.width = sidebarCollapsed ? `${collapsedWidth}px` : `${sidebarWidth}px`
+    }
 
     return () => {
-      resizer.removeEventListener("mousedown", onMouseDown)
+      if (typeof cleanup === "function") {
+        cleanup()
+      } else if (typeof cleanup === "number") {
+        clearTimeout(cleanup)
+      }
     }
-  }, [minWidth, sidebarCollapsed])
+  }, [sidebarCollapsed, sidebarWidth, collapsedWidth, minWidth, setSidebarWidth])
 
   const initSplitResizer = useCallback(() => {
     const splitResizer = document.getElementById("split-resizer")
@@ -357,9 +388,6 @@ export default function Home() {
   }, [splitView, splitRatio, minSplitWidth])
 
   // Инициализация изменения размера
-  useLayoutEffect(() => {
-    return initResizer()
-  }, [initResizer])
 
   // Инициализация изменения размера split view
   useLayoutEffect(() => {
@@ -1214,10 +1242,14 @@ export default function Home() {
         {/* Добавить элемент для изменения размера */}
         <div
           id="sidebar-resizer"
-          className="w-[2px] cursor-col-resize hover:bg-gray-500 active:bg-gray-400 z-10"
+          className="cursor-col-resize hover:bg-gray-500 active:bg-gray-400 z-10"
           style={{
+            position: "relative",
+            width: "4px",
+            margin: "0 -2px",
             background: "linear-gradient(to right, #1B1C1F 0%, #1E1F22 100%)",
-            opacity: 0.8,
+            opacity: sidebarCollapsed ? 0 : 0.8,
+            pointerEvents: sidebarCollapsed ? "none" : "auto",
           }}
         />
 
