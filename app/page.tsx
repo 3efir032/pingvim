@@ -832,32 +832,52 @@ export default function Home() {
         onDragOver={handleDragOver}
         onDrop={() => handleDrop(pane)}
       >
-        {files.map((fileId) => {
-          const file = fileSystem.files.find((f) => f.id === fileId)
-          if (!file) return null
-
-          const isActive = fileId === activeFile
-
-          return (
-            <div
-              key={fileId}
-              className={`flex items-center px-3 py-1 cursor-pointer h-full ${
-                isActive
-                  ? "bg-[#1E1F22] border-b-4 border-b-[#2E436E]"
-                  : "bg-[#1E1F22] hover:bg-[#3f4244] border-b-4 border-b-transparent"
-              }`}
-              style={{ fontSize: "13px" }}
-              onClick={() => setActiveFile(fileId)}
-              draggable
-              onDragStart={() => handleDragStart(pane, fileId)}
+        {pane === "left" && (
+          <div className="flex-shrink-0 px-2">
+            <button
+              className="p-1 hover:bg-gray-600 rounded text-gray-400 hover:text-gray-200"
+              onClick={() => {
+                if (activeFile) {
+                  handleSplitView(activeFile)
+                }
+              }}
+              title="Split View"
             >
-              <span className="truncate">{file.name}</span>
-              <button className="ml-2 p-1 hover:bg-gray-600 rounded" onClick={(e) => handleCloseFile(pane, fileId, e)}>
-                <X className="h-3 w-3" />
-              </button>
-            </div>
-          )
-        })}
+              <SplitSquareVertical className="h-4 w-4" />
+            </button>
+          </div>
+        )}
+        <div className="flex items-center overflow-x-auto">
+          {files.map((fileId) => {
+            const file = fileSystem.files.find((f) => f.id === fileId)
+            if (!file) return null
+
+            const isActive = fileId === activeFile
+
+            return (
+              <div
+                key={fileId}
+                className={`flex items-center px-3 py-1 cursor-pointer h-full ${
+                  isActive
+                    ? "bg-[#1E1F22] border-b-4 border-b-[#2E436E]"
+                    : "bg-[#1E1F22] hover:bg-[#3f4244] border-b-4 border-b-transparent"
+                }`}
+                style={{ fontSize: "13px" }}
+                onClick={() => setActiveFile(fileId)}
+                draggable
+                onDragStart={() => handleDragStart(pane, fileId)}
+              >
+                <span className="truncate">{file.name}</span>
+                <button
+                  className="ml-2 p-1 hover:bg-gray-600 rounded"
+                  onClick={(e) => handleCloseFile(pane, fileId, e)}
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            )
+          })}
+        </div>
       </div>
     )
   }
@@ -1245,9 +1265,9 @@ export default function Home() {
           className="cursor-col-resize hover:bg-gray-500 active:bg-gray-400 z-10"
           style={{
             position: "relative",
-            width: "4px",
-            margin: "0 -2px",
-            background: "linear-gradient(to right, #1B1C1F 0%, #1E1F22 100%)",
+            width: "6px",
+            margin: "0 -3px",
+            background: "#1E1F22",
             opacity: sidebarCollapsed ? 0 : 0.8,
             pointerEvents: sidebarCollapsed ? "none" : "auto",
           }}
@@ -1283,7 +1303,7 @@ export default function Home() {
             {splitView && (
               <div
                 id="split-resizer"
-                className="w-[2px] cursor-col-resize hover:bg-gray-500 active:bg-gray-400 z-10"
+                className="w-[3px] cursor-col-resize hover:bg-gray-500 active:bg-gray-400 z-10"
                 style={{
                   background: "#1E1F22",
                   opacity: 0.8,
