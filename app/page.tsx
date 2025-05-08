@@ -28,6 +28,7 @@ import type { FileType, FolderType } from "@/types/file-system"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 
 export default function Home() {
   // Состояние авторизации
@@ -48,6 +49,22 @@ export default function Home() {
     setIsAuthenticated(auth === "true")
     setAuthChecked(true)
   }, [])
+
+  // Добавляем обработчик нажатия клавиши Esc для блокировки редактора
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && isAuthenticated) {
+        // Блокируем редактор при нажатии Esc
+        localStorage.removeItem("pycharm-auth")
+        setIsAuthenticated(false)
+      }
+    }
+
+    document.addEventListener("keydown", handleKeyDown)
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown)
+    }
+  }, [isAuthenticated])
 
   // Функция для смены пароля
   const handleChangePassword = () => {
@@ -157,7 +174,7 @@ export default function Home() {
     files: FileType[]
   }>("pycharm-file-system", {
     folders: [
-      { id: "1", name: "project", isOpen: true, parentId: null },
+      { id: "1", name: "Notes", isOpen: true, parentId: null },
       { id: "2", name: "src", isOpen: true, parentId: "1" },
       { id: "3", name: "1", isOpen: true, parentId: "2" },
       { id: "4", name: "123", isOpen: true, parentId: "3" },
@@ -762,6 +779,7 @@ export default function Home() {
       if (!leftPaneFiles.includes(fileId)) {
         setLeftPaneFiles((prev) => [...prev, fileId])
       }
+      setLeftPaneFiles((prev) => [...prev, fileId])
 
       // Make it active in left pane
       setLeftActiveFile(fileId)
@@ -931,7 +949,7 @@ export default function Home() {
     return (
       <div className="p-2">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-sm font-medium">Project</span>
+          <span className="text-sm font-medium">Cluster</span>
           <div className="flex space-x-1">
             <button
               className="p-1 hover:bg-gray-600 rounded"
@@ -1039,8 +1057,66 @@ export default function Home() {
       <div ref={toolbarRef} className="flex items-center text-sm h-10 bg-[#1B1C1F]">
         <div className="flex items-center">
           <div className="flex items-center px-2 py-1">
-            <div className="bg-yellow-500 text-black font-bold w-6 h-6 flex items-center justify-center rounded">
-              PV
+            <div
+              className="bg-yellow-500 text-black font-bold w-6 h-6 flex items-center justify-center rounded relative overflow-hidden animate-pulse hover:animate-none"
+              style={{
+                animation: "logoSpin 3s infinite alternate",
+              }}
+            >
+              <style jsx>{`
+                @keyframes logoSpin {
+                  0% {
+                    transform: scale(1);
+                    box-shadow: 0 0 0 0 rgba(250, 204, 21, 0.4);
+                  }
+                  50% {
+                    transform: scale(1.05);
+                    box-shadow: 0 0 0 5px rgba(250, 204, 21, 0);
+                  }
+                  100% {
+                    transform: scale(1);
+                    box-shadow: 0 0 0 0 rgba(250, 204, 21, 0);
+                  }
+                }
+                
+                @keyframes textRotate {
+                  0% {
+                    transform: rotate(-8deg);
+                  }
+                  50% {
+                    transform: rotate(0deg);
+                  }
+                  100% {
+                    transform: rotate(8deg);
+                  }
+                }
+              `}</style>
+              <span
+                className="relative z-10"
+                style={{
+                  animation: "textRotate 3s ease-in-out infinite alternate",
+                  display: "inline-block",
+                }}
+              >
+                PV
+              </span>
+              <div
+                className="absolute inset-0 bg-gradient-to-br from-yellow-400 to-yellow-600 opacity-80"
+                style={{ animation: "gradientShift 4s infinite alternate" }}
+              ></div>
+              <style jsx>{`
+                @keyframes gradientShift {
+                  0% {
+                    background-position: 0% 50%;
+                  }
+                  50% {
+                    background-position: 100% 50%;
+                  }
+                  100% {
+                    background-position: 0% 50%;
+                  }
+                }
+              `}</style>
             </div>
           </div>
 
@@ -1051,27 +1127,36 @@ export default function Home() {
 
         <div className="ml-auto flex items-center">
           <input type="file" ref={fileInputRef} className="hidden" accept=".json" onChange={importData} />
-          <button className="p-2 hover:bg-gray-600" onClick={() => setChangePasswordOpen(true)} title="Сменить пароль">
-            <User className="h-4 w-4" />
-          </button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="p-2 hover:bg-gray-600" title="Меню пользователя">
+                <User className="h-4 w-4" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="bg-[#1B1C1F] border-gray-700 text-gray-300">
+              <DropdownMenuItem
+                onClick={() => setChangePasswordOpen(true)}
+                className="hover:bg-[#2E436E] cursor-pointer focus:bg-[#2E436E] focus:text-gray-300"
+              >
+                Сменить пароль
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => {
+                  localStorage.removeItem("pycharm-auth")
+                  setIsAuthenticated(false)
+                }}
+                className="hover:bg-[#2E436E] cursor-pointer focus:bg-[#2E436E] focus:text-gray-300"
+              >
+                Заблокировать редактор
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <button
             className="p-2 hover:bg-gray-600"
             onClick={() => setSettingsOpen(!settingsOpen)}
             ref={settingsButtonRef}
           >
             <Settings className="h-4 w-4" />
-          </button>
-          <button
-            className="p-2 hover:bg-gray-600"
-            onClick={() => {
-              // Удаляем состояние авторизации из localStorage
-              localStorage.removeItem("pycharm-auth")
-              // Устанавливаем состояние isAuthenticated в false
-              setIsAuthenticated(false)
-            }}
-            title="Заблокировать редактор"
-          >
-            <X className="h-4 w-4" />
           </button>
         </div>
       </div>
@@ -1092,7 +1177,7 @@ export default function Home() {
               <input
                 type="text"
                 placeholder="Search files..."
-                className="bg-[#1E1F22] text-sm border-none outline-none focus:ring-0 w-full h-6 px-2 text-gray-300 rounded-md"
+                className="bg-[#1E1F22] text-sm border-none outline-none focus:ring-0 w-full h-6 px-2 text-gray-300 rounded-md shadow-[0_2px_4px_rgba(0,0,0,0.15)] focus:shadow-[0_0_8px_rgba(46,67,110,0.3)] transition-shadow duration-200"
                 value={searchTerm}
                 onChange={(e) => {
                   const term = e.target.value

@@ -207,7 +207,7 @@ export default function PixelAnimation({ className = "" }: PixelAnimationProps) 
 
       // Обновляем и рисуем пиксели
       pixels.forEach((pixel) => {
-        // Обновляем положение пикселя в зависимости от его состояния
+        // Обновляем положение пикселя в зависим����сти от его состояния
         if (pixel.state === "forming" && pixel.targetX !== null && pixel.targetY !== null) {
           // Двигаемся к цели
           const dx = pixel.targetX - pixel.x
