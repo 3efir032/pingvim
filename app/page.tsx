@@ -772,6 +772,15 @@ export default function Home() {
       const result = await fetchFileSystemFromDb()
 
       if (result.success && result.data) {
+        // Проверяем, не пуста ли база данных
+        if (result.data.folders.length === 0 && result.data.files.length === 0) {
+          // Если база пуста, синхронизируем текущие локальные данные с базой
+          await syncDataWithDatabase(fileSystem)
+          // Не обновляем локальное состояние, так как мы только что отправили наши данные в базу
+          return true
+        }
+
+        // Если в базе есть данные, обновляем локальное состояние
         setFileSystem(result.data)
 
         // Сбрасываем открытые файлы, так как их ID могут не совпадать
@@ -834,11 +843,30 @@ export default function Home() {
     setIsDbConnected(true)
 
     // Загружаем данные из базы данных
-    const loaded = await loadDataFromDb()
+    const result = await fetchFileSystemFromDb()
 
-    if (!loaded) {
+    // Проверяем, есть ли данные в базе
+    if (result.success && result.data) {
+      // Проверяем, не пуста ли база данных (нет папок или файлов)
+      if (result.data.folders.length === 0 && result.data.files.length === 0) {
+        // Если база пуста, синхронизируем текущие локальные данные с базой
+        await syncDataWithDatabase(fileSystem)
+        // Не обновляем локальное состояние, так как мы только что отправили наши данные в базу
+      } else {
+        // Если в базе есть данные, обновляем локальное состояние
+        setFileSystem(result.data)
+
+        // Сбрасываем открытые файлы, так как их ID могут не совпадать
+        setLeftPaneFiles([])
+        setRightPaneFiles([])
+        setLeftActiveFile(null)
+        setRightActiveFile(null)
+      }
+      return true
+    } else {
       // Если не удалось загрузить данные, синхронизируем локальные данные с базой данных
-      await syncDataWithDb()
+      await syncDataWithDatabase(fileSystem)
+      return false
     }
   }
 
@@ -1468,6 +1496,7 @@ export default function Home() {
         </div>
       )}
 
+      {/* Change Password Dialog */}
       {/* Change Password Dialog */}
       <Dialog open={changePasswordOpen} onOpenChange={setChangePasswordOpen}>
         <DialogContent className="bg-[#1B1C1F] border-gray-700 text-gray-300 p-0">
