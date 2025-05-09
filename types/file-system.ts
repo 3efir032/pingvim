@@ -16,3 +16,9 @@ export interface OpenFileType {
   id: string
   isPrimary: boolean
 }
+
+// Добавьте новое поле для отслеживания источника данных
+export interface FileSystemMetadata {
+  source: "local" | "database"
+  lastSyncTime?: string
+}

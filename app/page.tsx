@@ -29,6 +29,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import DbConnectionDialog from "@/components/db-connection-dialog"
+import DbStatus from "@/components/db-status"
 
 export default function Home() {
   // Состояние авторизации
@@ -125,6 +127,14 @@ export default function Home() {
   const [fontSize, setFontSize] = useLocalStorage<number>("pycharm-font-size", 14)
   // Track settings menu open state
   const [settingsOpen, setSettingsOpen] = useState(false)
+
+  // Состояние для диалога подключения к базе данных
+  const [dbConnectionDialogOpen, setDbConnectionDialogOpen] = useState(false)
+  // Состояние для отслеживания подключения к базе данных
+  const [isDbConnected, setIsDbConnected] = useState(false)
+  // Состояние для отслеживания синхронизации с базой данных
+  const [isSyncing, setIsSyncing] = useState(false)
+
   // Reference to the settings button
   const settingsButtonRef = useRef<HTMLButtonElement>(null)
 
@@ -755,6 +765,131 @@ export default function Home() {
     setSettingsOpen((prev) => !prev)
   }
 
+  // Функция для загрузки данных из базы данных
+  const loadDataFromDb = async () => {
+    try {
+      const response = await fetch("/api/db/fetch")
+      const result = await response.json()
+
+      if (result.success && result.data) {
+        setFileSystem(result.data)
+
+        // Сбрасываем открытые файлы, так как их ID могут не совпадать
+        setLeftPaneFiles([])
+        setRightPaneFiles([])
+        setLeftActiveFile(null)
+        setRightActiveFile(null)
+
+        return true
+      }
+
+      return false
+    } catch (error) {
+      console.error("Ошибка загрузки данных из базы данных:", error)
+      return false
+    }
+  }
+
+  // Функция для синхронизации данных с базой данных
+  const syncDataWithDb = async () => {
+    if (!isDbConnected) return false
+
+    setIsSyncing(true)
+
+    try {
+      const response = await fetch("/api/db/sync", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(fileSystem),
+      })
+
+      const result = await response.json()
+      return result.success
+    } catch (error) {
+      console.error("Ошибка синхронизации данных с базой данных:", error)
+      return false
+    } finally {
+      setIsSyncing(false)
+    }
+  }
+
+  // Эффект для автоматической синхронизации данных с базой данных
+  useEffect(() => {
+    if (isDbConnected) {
+      // Используем debounce для предотвращения слишком частых запросов
+      const timer = setTimeout(() => {
+        syncDataWithDb()
+      }, 2000)
+
+      return () => clearTimeout(timer)
+    }
+  }, [fileSystem, isDbConnected])
+
+  // Добавим новый useEffect для автоматического подключения к базе данных при загрузке страницы
+  // Добавьте этот код после других useEffect
+
+  useEffect(() => {
+    // Функция для автоматического подключения к базе данных
+    const autoConnectToDb = async () => {
+      // Проверяем, есть ли сохраненная конфигурация
+      const savedConfig = localStorage.getItem("pycharm-db-config")
+      if (!savedConfig) return
+
+      try {
+        const config = JSON.parse(savedConfig)
+
+        // Пытаемся подключиться к базе данных
+        const response = await fetch("/api/db/connect", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(config),
+        })
+
+        const result = await response.json()
+
+        if (result.success) {
+          setIsDbConnected(true)
+          // Загружаем данные из базы данных
+          await loadDataFromDb()
+        }
+      } catch (error) {
+        console.error("Ошибка автоматического подключения к базе данных:", error)
+      }
+    }
+
+    // Запускаем автоматическое подключение только если пользователь авторизован
+    if (isAuthenticated) {
+      autoConnectToDb()
+    }
+  }, [isAuthenticated])
+
+  // Функция для обработки изменения статуса подключения к базе данных
+  const handleDbConnectionStatus = async (connected: boolean) => {
+    setIsDbConnected(connected)
+
+    if (connected) {
+      // Если подключились к базе данных, загружаем данные
+      await loadDataFromDb()
+    }
+  }
+
+  // Функция для обработки успешного подключения к базе данных
+  const handleDbConnected = async () => {
+    setIsDbConnected(true)
+
+    // Загружаем данные из базы данных
+    const loaded = await loadDataFromDb()
+
+    if (!loaded) {
+      // Если не удалось загрузить данные, синхронизируем локальные данные с базой данных
+      await syncDataWithDb()
+    }
+  }
+
   // Drag and drop handlers
   const handleDragStart = (pane: "left" | "right", fileId: string) => {
     setDraggedTab({ pane, fileId })
@@ -1175,6 +1310,10 @@ export default function Home() {
 
         <div className="ml-auto flex items-center">
           <input type="file" ref={fileInputRef} className="hidden" accept=".json" onChange={importData} />
+          <DbStatus
+            onOpenConnectionDialog={() => setDbConnectionDialogOpen(true)}
+            onStatusChange={handleDbConnectionStatus}
+          />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button className="p-2 hover:bg-gray-600" title="Меню пользователя">
@@ -1545,6 +1684,12 @@ export default function Home() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {/* Диалог подключения к базе данных */}
+      <DbConnectionDialog
+        open={dbConnectionDialogOpen}
+        onOpenChange={setDbConnectionDialogOpen}
+        onConnected={handleDbConnected}
+      />
     </div>
   )
 }
