@@ -31,6 +31,7 @@ import { Input } from "@/components/ui/input"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import DbConnectionDialog from "@/components/db-connection-dialog"
 import DbStatus from "@/components/db-status"
+import { fetchFileSystemFromDb, syncDataWithDatabase } from "@/app/actions/db-actions"
 
 export default function Home() {
   // Состояние авторизации
@@ -768,10 +769,18 @@ export default function Home() {
   // Функция для загрузки данных из базы данных
   const loadDataFromDb = async () => {
     try {
-      const response = await fetch("/api/db/fetch")
-      const result = await response.json()
+      const result = await fetchFileSystemFromDb()
 
       if (result.success && result.data) {
+        // Проверяем, не пуста ли база данных
+        if (result.data.folders.length === 0 && result.data.files.length === 0) {
+          // Если база пуста, синхронизируем текущие локальные данные с базой
+          await syncDataWithDatabase(fileSystem)
+          // Не обновляем локальное состояние, так как мы только что отправили наши данные в базу
+          return true
+        }
+
+        // Если в базе есть данные, обновляем локальное состояние
         setFileSystem(result.data)
 
         // Сбрасываем открытые файлы, так как их ID могут не совпадать
@@ -797,15 +806,7 @@ export default function Home() {
     setIsSyncing(true)
 
     try {
-      const response = await fetch("/api/db/sync", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(fileSystem),
-      })
-
-      const result = await response.json()
+      const result = await syncDataWithDatabase(fileSystem)
       return result.success
     } catch (error) {
       console.error("Ошибка синхронизации данных с базой данных:", error)
@@ -827,46 +828,6 @@ export default function Home() {
     }
   }, [fileSystem, isDbConnected])
 
-  // Добавим новый useEffect для автоматического подключения к базе данных при загрузке страницы
-  // Добавьте этот код после других useEffect
-
-  useEffect(() => {
-    // Функция для автоматического подключения к базе данных
-    const autoConnectToDb = async () => {
-      // Проверяем, есть ли сохраненная конфигурация
-      const savedConfig = localStorage.getItem("pycharm-db-config")
-      if (!savedConfig) return
-
-      try {
-        const config = JSON.parse(savedConfig)
-
-        // Пытаемся подключиться к базе данных
-        const response = await fetch("/api/db/connect", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(config),
-        })
-
-        const result = await response.json()
-
-        if (result.success) {
-          setIsDbConnected(true)
-          // Загружаем данные из базы данных
-          await loadDataFromDb()
-        }
-      } catch (error) {
-        console.error("Ошибка автоматического подключения к базе данных:", error)
-      }
-    }
-
-    // Запускаем автоматическое подключение только если пользователь авторизован
-    if (isAuthenticated) {
-      autoConnectToDb()
-    }
-  }, [isAuthenticated])
-
   // Функция для обработки изменения статуса подключения к базе данных
   const handleDbConnectionStatus = async (connected: boolean) => {
     setIsDbConnected(connected)
@@ -882,11 +843,30 @@ export default function Home() {
     setIsDbConnected(true)
 
     // Загружаем данные из базы данных
-    const loaded = await loadDataFromDb()
+    const result = await fetchFileSystemFromDb()
 
-    if (!loaded) {
+    // Проверяем, есть ли данные в базе
+    if (result.success && result.data) {
+      // Проверяем, не пуста ли база данных (нет папок или файлов)
+      if (result.data.folders.length === 0 && result.data.files.length === 0) {
+        // Если база пуста, синхронизируем текущие локальные данные с базой
+        await syncDataWithDatabase(fileSystem)
+        // Не обновляем локальное состояние, так как мы только что отправили наши данные в базу
+      } else {
+        // Если в базе есть данные, обновляем локальное состояние
+        setFileSystem(result.data)
+
+        // Сбрасываем открытые файлы, так как их ID могут не совпадать
+        setLeftPaneFiles([])
+        setRightPaneFiles([])
+        setLeftActiveFile(null)
+        setRightActiveFile(null)
+      }
+      return true
+    } else {
       // Если не удалось загрузить данные, синхронизируем локальные данные с базой данных
-      await syncDataWithDb()
+      await syncDataWithDatabase(fileSystem)
+      return false
     }
   }
 
@@ -1516,6 +1496,7 @@ export default function Home() {
         </div>
       )}
 
+      {/* Change Password Dialog */}
       {/* Change Password Dialog */}
       <Dialog open={changePasswordOpen} onOpenChange={setChangePasswordOpen}>
         <DialogContent className="bg-[#1B1C1F] border-gray-700 text-gray-300 p-0">

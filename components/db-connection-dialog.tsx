@@ -7,7 +7,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Loader2 } from "lucide-react"
-import type { DbConfig } from "@/lib/db-types"
+import { testDatabaseConnection, connectToDatabase } from "@/app/actions/db-actions"
+import type { DbConfig } from "@/lib/mock-db"
 
 interface DbConnectionDialogProps {
   open: boolean
@@ -40,33 +41,11 @@ export default function DbConnectionDialog({ open, onOpenChange, onConnected }: 
     setError(null)
 
     try {
-      const response = await fetch("/api/db/test", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(config),
-      })
-
-      if (!response.ok) {
-        const errorText = await response.text()
-        console.error("Ошибка при тестировании соединения:", response.status, response.statusText, errorText)
-        setTestResult({
-          success: false,
-          message: `Ошибка сервера: ${response.status} ${response.statusText}`,
-        })
-        setTestLoading(false)
-        return
-      }
-
-      const result = await response.json()
+      const result = await testDatabaseConnection(config)
       setTestResult(result)
     } catch (err) {
-      console.error("Ошибка при проверке соединения:", err)
-      setTestResult({
-        success: false,
-        message: err instanceof Error ? err.message : "Неизвестная ошибка при проверке соединения",
-      })
+      setError("Произошла ошибка при проверке соединения")
+      console.error(err)
     } finally {
       setTestLoading(false)
     }
@@ -77,23 +56,7 @@ export default function DbConnectionDialog({ open, onOpenChange, onConnected }: 
     setError(null)
 
     try {
-      const response = await fetch("/api/db/connect", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(config),
-      })
-
-      if (!response.ok) {
-        const errorText = await response.text()
-        console.error("Ошибка при подключении:", response.status, response.statusText, errorText)
-        setError(`Ошибка сервера: ${response.status} ${response.statusText}`)
-        setLoading(false)
-        return
-      }
-
-      const result = await response.json()
+      const result = await connectToDatabase(config)
 
       if (result.success) {
         // Сохраняем конфигурацию в localStorage
@@ -104,8 +67,8 @@ export default function DbConnectionDialog({ open, onOpenChange, onConnected }: 
         setError(result.message)
       }
     } catch (err) {
-      console.error("Ошибка при подключении к базе данных:", err)
-      setError(err instanceof Error ? err.message : "Неизвестная ошибка при подключении к базе данных")
+      setError("Произошла ошибка при подключении к базе данных")
+      console.error(err)
     } finally {
       setLoading(false)
     }

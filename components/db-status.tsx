@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { Database, ServerOffIcon as DatabaseOff, RefreshCw, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import { checkDatabaseConnection, disconnectFromDatabase } from "@/app/actions/db-actions"
 
 interface DbStatusProps {
   onOpenConnectionDialog: () => void
@@ -18,35 +19,7 @@ export default function DbStatus({ onOpenConnectionDialog, onStatusChange }: DbS
   const checkConnection = async () => {
     setIsChecking(true)
     try {
-      // Добавляем случайный параметр запроса для предотвращения кэширования
-      const response = await fetch(`/api/db/status?_=${Date.now()}`)
-
-      // Проверяем, что ответ успешный
-      if (!response.ok) {
-        console.error("Ошибка при проверке статуса:", response.status, response.statusText)
-        setIsConnected(false)
-        onStatusChange(false)
-        setIsChecking(false)
-        return
-      }
-
-      // Безопасно парсим JSON
-      let result
-      try {
-        result = await response.json()
-      } catch (parseError) {
-        console.error("Ошибка парсинга JSON:", parseError)
-
-        // Получаем текст ответа для отладки
-        const responseText = await response.text()
-        console.error("Текст ответа:", responseText)
-
-        setIsConnected(false)
-        onStatusChange(false)
-        setIsChecking(false)
-        return
-      }
-
+      const result = await checkDatabaseConnection()
       setIsConnected(result.connected)
       onStatusChange(result.connected)
     } catch (error) {
@@ -61,16 +34,7 @@ export default function DbStatus({ onOpenConnectionDialog, onStatusChange }: DbS
   const handleDisconnect = async () => {
     setIsDisconnecting(true)
     try {
-      const response = await fetch("/api/db/disconnect", {
-        method: "POST",
-      })
-
-      if (!response.ok) {
-        console.error("Ошибка при отключении:", response.status, response.statusText)
-        setIsDisconnecting(false)
-        return
-      }
-
+      await disconnectFromDatabase()
       setIsConnected(false)
       onStatusChange(false)
     } catch (error) {
@@ -81,18 +45,10 @@ export default function DbStatus({ onOpenConnectionDialog, onStatusChange }: DbS
   }
 
   useEffect(() => {
-    // Добавляем небольшую задержку перед первой проверкой
-    const timer = setTimeout(() => {
-      checkConnection()
-    }, 500)
-
+    checkConnection()
     // Проверяем соединение каждые 30 секунд
     const interval = setInterval(checkConnection, 30000)
-
-    return () => {
-      clearTimeout(timer)
-      clearInterval(interval)
-    }
+    return () => clearInterval(interval)
   }, [])
 
   return (
