@@ -126,20 +126,12 @@ export async function syncLocalDataWithDb(fileSystem: { folders: FolderType[]; f
 
 // Функция для получения всей файловой системы из базы данных
 export async function getFileSystemFromDb(): Promise<{ folders: FolderType[]; files: FileType[] }> {
-  if (!isConnected) {
+  if (!isConnected || !mockDbStorage) {
     throw new Error("База данных не подключена")
   }
 
   // Имитируем задержку сетевого запроса
   await new Promise((resolve) => setTimeout(resolve, 500))
-
-  // Если хранилище не инициализировано, возвращаем пустые массивы
-  if (!mockDbStorage) {
-    return {
-      folders: [],
-      files: [],
-    }
-  }
 
   return {
     folders: [...mockDbStorage.folders],
