@@ -997,20 +997,6 @@ export default function Home() {
             <button className="p-1 hover:bg-gray-600 rounded" onClick={exportData} title="Экспорт данных">
               <Download className="h-3 w-3" />
             </button>
-            <button
-              className="p-1 hover:bg-gray-600 rounded"
-              onClick={() => openNewFolderDialog(rootFolders[0]?.id || "")}
-              title="New Folder"
-            >
-              <Folder className="h-3 w-3" />
-            </button>
-            <button
-              className="p-1 hover:bg-gray-600 rounded"
-              onClick={() => openNewFileDialog(rootFolders[0]?.id || "")}
-              title="New File"
-            >
-              <File className="h-3 w-3" />
-            </button>
           </div>
         </div>
         {rootFolders.map(renderFolder)}
