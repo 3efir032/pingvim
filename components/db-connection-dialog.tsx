@@ -20,7 +20,7 @@ export default function DbConnectionDialog({ open, onOpenChange, onConnectionCha
   const [error, setError] = useState<string>("")
   const [isLoading, setIsLoading] = useState(false)
 
-  // Listen for status changes
+  // Слушаем изменения статуса
   useEffect(() => {
     const removeListener = dbService.addStatusListener((newStatus, newError) => {
       setStatus(newStatus)
@@ -33,7 +33,7 @@ export default function DbConnectionDialog({ open, onOpenChange, onConnectionCha
     return removeListener
   }, [onConnectionChange])
 
-  // Check status on open
+  // Проверяем статус при открытии
   useEffect(() => {
     if (open) {
       const checkStatus = async () => {
@@ -86,13 +86,13 @@ export default function DbConnectionDialog({ open, onOpenChange, onConnectionCha
   const renderStatusText = () => {
     switch (status) {
       case "connected":
-        return "Connected to database"
+        return "Подключено к базе данных"
       case "connecting":
-        return "Connecting to database..."
+        return "Подключение к базе данных..."
       case "error":
-        return `Error: ${error}`
+        return `Ошибка: ${error}`
       case "disconnected":
-        return "Disconnected from database"
+        return "Отключено от базы данных"
     }
   }
 
@@ -100,7 +100,7 @@ export default function DbConnectionDialog({ open, onOpenChange, onConnectionCha
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="bg-[#1B1C1F] border-gray-700 text-gray-300 p-0">
         <DialogHeader className="p-4 border-b border-gray-700">
-          <DialogTitle>Database Connection</DialogTitle>
+          <DialogTitle>Подключение к базе данных</DialogTitle>
         </DialogHeader>
         <div className="p-4 space-y-4">
           <div className="flex items-center space-x-2 p-2 rounded bg-[#2b2b2b]">
@@ -112,7 +112,7 @@ export default function DbConnectionDialog({ open, onOpenChange, onConnectionCha
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label htmlFor="host" className="text-sm text-gray-400 mb-1 block">
-                  Host
+                  Хост
                 </Label>
                 <Input
                   id="host"
@@ -124,7 +124,7 @@ export default function DbConnectionDialog({ open, onOpenChange, onConnectionCha
               </div>
               <div>
                 <Label htmlFor="port" className="text-sm text-gray-400 mb-1 block">
-                  Port
+                  Порт
                 </Label>
                 <Input
                   id="port"
@@ -138,7 +138,7 @@ export default function DbConnectionDialog({ open, onOpenChange, onConnectionCha
 
             <div>
               <Label htmlFor="database" className="text-sm text-gray-400 mb-1 block">
-                Database
+                База данных
               </Label>
               <Input
                 id="database"
@@ -151,7 +151,7 @@ export default function DbConnectionDialog({ open, onOpenChange, onConnectionCha
 
             <div>
               <Label htmlFor="user" className="text-sm text-gray-400 mb-1 block">
-                Username
+                Пользователь
               </Label>
               <Input
                 id="user"
@@ -164,7 +164,7 @@ export default function DbConnectionDialog({ open, onOpenChange, onConnectionCha
 
             <div>
               <Label htmlFor="password" className="text-sm text-gray-400 mb-1 block">
-                Password
+                Пароль
               </Label>
               <Input
                 id="password"
@@ -185,7 +185,7 @@ export default function DbConnectionDialog({ open, onOpenChange, onConnectionCha
             className="bg-[#4b4b4b] text-gray-300 border-gray-700 hover:bg-[#5a5a5a]"
           >
             {isLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
-            Check Status
+            Проверить статус
           </Button>
           {status === "connected" ? (
             <Button
@@ -194,7 +194,7 @@ export default function DbConnectionDialog({ open, onOpenChange, onConnectionCha
               className="bg-[#ff5370] text-white hover:bg-[#ff3860]"
             >
               {isLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
-              Disconnect
+              Отключиться
             </Button>
           ) : (
             <Button
@@ -203,7 +203,7 @@ export default function DbConnectionDialog({ open, onOpenChange, onConnectionCha
               className="bg-[#2E436E] text-white hover:bg-[#3A5488]"
             >
               {isLoading || status === "connecting" ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
-              Connect
+              Подключиться
             </Button>
           )}
         </DialogFooter>

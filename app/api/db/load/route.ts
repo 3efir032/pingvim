@@ -1,45 +1,40 @@
 import { NextResponse } from "next/server"
-import type mysql from "mysql2/promise"
-
-// Reference to the global connection
-const connection: mysql.Connection | null = null
+import { getConnectionPool } from "../connect/route"
 
 export async function GET() {
   try {
-    if (!connection) {
-      return NextResponse.json({ error: "Not connected to database" }, { status: 400 })
+    const connectionPool = getConnectionPool()
+
+    if (!connectionPool || !global.dbConnected) {
+      return NextResponse.json({ error: "Нет подключения к базе данных" }, { status: 400 })
     }
 
-    // Get folders
-    const [foldersResult] = await connection.execute("SELECT * FROM folders")
-    const folders = foldersResult as any[]
+    const connection = await connectionPool.getConnection()
+    try {
+      // Получаем данные из таблицы pingvim
+      const [rows] = await connection.execute("SELECT data FROM pingvim WHERE id = ?", ["default"])
+      const rowsArray = rows as any[]
 
-    // Get files
-    const [filesResult] = await connection.execute("SELECT * FROM files")
-    const files = filesResult as any[]
+      if (rowsArray.length === 0) {
+        return NextResponse.json({
+          fileSystem: {
+            folders: [],
+            files: [],
+          },
+        })
+      }
 
-    // Convert boolean values from MySQL to JavaScript
-    const processedFolders = folders.map((folder) => ({
-      ...folder,
-      isOpen: Boolean(folder.isOpen),
-      parentId: folder.parentId === null ? null : folder.parentId,
-    }))
+      // Парсим JSON из поля data
+      const fileSystem = JSON.parse(rowsArray[0].data)
 
-    const processedFiles = files.map((file) => ({
-      ...file,
-      parentId: file.parentId === null ? null : file.parentId,
-    }))
-
-    return NextResponse.json({
-      fileSystem: {
-        folders: processedFolders,
-        files: processedFiles,
-      },
-    })
+      return NextResponse.json({ fileSystem })
+    } finally {
+      connection.release()
+    }
   } catch (error) {
-    console.error("Database load error:", error)
+    console.error("Ошибка загрузки из базы данных:", error)
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to load from database" },
+      { error: error instanceof Error ? error.message : "Не удалось загрузить данные из базы данных" },
       { status: 500 },
     )
   }

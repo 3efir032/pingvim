@@ -2,10 +2,10 @@
 
 import type { FileType, FolderType } from "@/types/file-system"
 
-// Database connection status
+// Статус подключения к базе данных
 export type ConnectionStatus = "disconnected" | "connecting" | "connected" | "error"
 
-// Database connection configuration
+// Конфигурация подключения к базе данных
 export interface DbConfig {
   host: string
   port: string
@@ -14,7 +14,7 @@ export interface DbConfig {
   database: string
 }
 
-// Default connection configuration
+// Конфигурация по умолчанию
 export const defaultDbConfig: DbConfig = {
   host: "91.203.233.176",
   port: "3306",
@@ -28,29 +28,29 @@ class DbService {
   private errorMessage = ""
   private statusListeners: ((status: ConnectionStatus, error?: string) => void)[] = []
 
-  // Add a listener for connection status changes
+  // Добавить слушателя изменений статуса
   public addStatusListener(listener: (status: ConnectionStatus, error?: string) => void) {
     this.statusListeners.push(listener)
-    // Immediately notify the new listener of the current status
+    // Сразу уведомляем нового слушателя о текущем статусе
     listener(this.status, this.errorMessage)
     return () => {
       this.statusListeners = this.statusListeners.filter((l) => l !== listener)
     }
   }
 
-  // Update status and notify all listeners
+  // Обновить статус и уведомить всех слушателей
   private updateStatus(status: ConnectionStatus, error?: string) {
     this.status = status
     this.errorMessage = error || ""
     this.statusListeners.forEach((listener) => listener(this.status, this.errorMessage))
   }
 
-  // Connect to the database
+  // Подключиться к базе данных
   public async connect(config: DbConfig): Promise<boolean> {
     try {
       this.updateStatus("connecting")
 
-      // Make API call to connect to the database
+      // Делаем API-запрос для подключения к базе данных
       const response = await fetch("/api/db/connect", {
         method: "POST",
         headers: {
@@ -62,48 +62,48 @@ class DbService {
       const data = await response.json()
 
       if (!response.ok) {
-        this.updateStatus("error", data.error || "Failed to connect to database")
+        this.updateStatus("error", data.error || "Не удалось подключиться к базе данных")
         return false
       }
 
       this.updateStatus("connected")
       return true
     } catch (error) {
-      this.updateStatus("error", error instanceof Error ? error.message : "Unknown error")
+      this.updateStatus("error", error instanceof Error ? error.message : "Неизвестная ошибка")
       return false
     }
   }
 
-  // Disconnect from the database
+  // Отключиться от базы данных
   public async disconnect(): Promise<boolean> {
     try {
-      // Make API call to disconnect from the database
+      // Делаем API-запрос для отключения от базы данных
       const response = await fetch("/api/db/disconnect", {
         method: "POST",
       })
 
       if (!response.ok) {
         const data = await response.json()
-        this.updateStatus("error", data.error || "Failed to disconnect from database")
+        this.updateStatus("error", data.error || "Не удалось отключиться от базы данных")
         return false
       }
 
       this.updateStatus("disconnected")
       return true
     } catch (error) {
-      this.updateStatus("error", error instanceof Error ? error.message : "Unknown error")
+      this.updateStatus("error", error instanceof Error ? error.message : "Неизвестная ошибка")
       return false
     }
   }
 
-  // Check connection status
+  // Проверить статус подключения
   public async checkStatus(): Promise<ConnectionStatus> {
     try {
       const response = await fetch("/api/db/status")
 
       if (!response.ok) {
         const data = await response.json()
-        this.updateStatus("error", data.error || "Failed to check database status")
+        this.updateStatus("error", data.error || "Не удалось проверить статус базы данных")
         return "error"
       }
 
@@ -111,12 +111,12 @@ class DbService {
       this.updateStatus(data.status)
       return data.status
     } catch (error) {
-      this.updateStatus("error", error instanceof Error ? error.message : "Unknown error")
+      this.updateStatus("error", error instanceof Error ? error.message : "Неизвестная ошибка")
       return "error"
     }
   }
 
-  // Save file system to database
+  // Сохранить файловую систему в базу данных
   public async saveFileSystem(fileSystem: { folders: FolderType[]; files: FileType[] }): Promise<boolean> {
     try {
       if (this.status !== "connected") {
@@ -133,18 +133,18 @@ class DbService {
 
       if (!response.ok) {
         const data = await response.json()
-        console.error("Failed to save to database:", data.error)
+        console.error("Не удалось сохранить в базу данных:", data.error)
         return false
       }
 
       return true
     } catch (error) {
-      console.error("Error saving to database:", error)
+      console.error("Ошибка сохранения в базу данных:", error)
       return false
     }
   }
 
-  // Load file system from database
+  // Загрузить файловую систему из базы данных
   public async loadFileSystem(): Promise<{ folders: FolderType[]; files: FileType[] } | null> {
     try {
       if (this.status !== "connected") {
@@ -155,24 +155,24 @@ class DbService {
 
       if (!response.ok) {
         const data = await response.json()
-        console.error("Failed to load from database:", data.error)
+        console.error("Не удалось загрузить из базы данных:", data.error)
         return null
       }
 
       const data = await response.json()
       return data.fileSystem
     } catch (error) {
-      console.error("Error loading from database:", error)
+      console.error("Ошибка загрузки из базы данных:", error)
       return null
     }
   }
 
-  // Get current status
+  // Получить текущий статус
   public getStatus(): { status: ConnectionStatus; error: string } {
     return { status: this.status, error: this.errorMessage }
   }
 }
 
-// Create a singleton instance
+// Создаем синглтон
 const dbService = new DbService()
 export default dbService

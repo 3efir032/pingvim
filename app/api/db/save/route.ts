@@ -1,63 +1,33 @@
 import { NextResponse } from "next/server"
-import type mysql from "mysql2/promise"
-
-// Reference to the global connection
-const connection: mysql.Connection | null = null
+import { getConnectionPool } from "../connect/route"
 
 export async function POST(request: Request) {
   try {
-    if (!connection) {
-      return NextResponse.json({ error: "Not connected to database" }, { status: 400 })
+    const connectionPool = getConnectionPool()
+
+    if (!connectionPool || !global.dbConnected) {
+      return NextResponse.json({ error: "Нет подключения к базе данных" }, { status: 400 })
     }
 
     const body = await request.json()
-    const { folders, files } = body
+    const fileSystemData = JSON.stringify(body)
 
-    // Start a transaction
-    await connection.beginTransaction()
-
+    const connection = await connectionPool.getConnection()
     try {
-      // Clear existing data
-      await connection.execute("DELETE FROM folders")
-      await connection.execute("DELETE FROM files")
-
-      // Insert folders
-      if (folders && folders.length > 0) {
-        for (const folder of folders) {
-          await connection.execute("INSERT INTO folders (id, name, isOpen, parentId) VALUES (?, ?, ?, ?)", [
-            folder.id,
-            folder.name,
-            folder.isOpen,
-            folder.parentId,
-          ])
-        }
-      }
-
-      // Insert files
-      if (files && files.length > 0) {
-        for (const file of files) {
-          await connection.execute("INSERT INTO files (id, name, content, parentId) VALUES (?, ?, ?, ?)", [
-            file.id,
-            file.name,
-            file.content,
-            file.parentId,
-          ])
-        }
-      }
-
-      // Commit the transaction
-      await connection.commit()
+      // Обновляем данные в таблице pingvim
+      await connection.execute("UPDATE pingvim SET data = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", [
+        fileSystemData,
+        "default",
+      ])
 
       return NextResponse.json({ success: true })
-    } catch (error) {
-      // Rollback on error
-      await connection.rollback()
-      throw error
+    } finally {
+      connection.release()
     }
   } catch (error) {
-    console.error("Database save error:", error)
+    console.error("Ошибка сохранения в базу данных:", error)
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to save to database" },
+      { error: error instanceof Error ? error.message : "Не удалось сохранить данные в базу данных" },
       { status: 500 },
     )
   }

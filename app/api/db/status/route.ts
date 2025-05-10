@@ -1,23 +1,26 @@
 import { NextResponse } from "next/server"
-import type mysql from "mysql2/promise"
-
-// Reference to the global connection
-const connection: mysql.Connection | null = null
+import { getConnectionPool } from "../connect/route"
 
 export async function GET() {
   try {
-    if (!connection) {
+    const connectionPool = getConnectionPool()
+
+    if (!connectionPool || !global.dbConnected) {
       return NextResponse.json({ status: "disconnected" })
     }
 
-    // Test the connection
+    // Проверяем соединение
+    const connection = await connectionPool.getConnection()
     await connection.ping()
+    connection.release()
+
     return NextResponse.json({ status: "connected" })
   } catch (error) {
-    console.error("Database status check error:", error)
+    console.error("Ошибка проверки статуса базы данных:", error)
+    global.dbConnected = false
     return NextResponse.json({
       status: "error",
-      error: error instanceof Error ? error.message : "Failed to check database status",
+      error: error instanceof Error ? error.message : "Не удалось проверить статус базы данных",
     })
   }
 }

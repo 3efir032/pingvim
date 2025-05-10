@@ -1,22 +1,21 @@
 import { NextResponse } from "next/server"
-import type mysql from "mysql2/promise"
-
-// Reference to the global connection
-let connection: mysql.Connection | null = null
+import { getConnectionPool } from "../connect/route"
 
 export async function POST() {
   try {
-    // Close the connection if it exists
-    if (connection) {
-      await connection.end()
-      connection = null
+    const connectionPool = getConnectionPool()
+
+    // Закрываем соединение, если оно существует
+    if (connectionPool) {
+      await connectionPool.end()
+      global.dbConnected = false
     }
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error("Database disconnection error:", error)
+    console.error("Ошибка отключения от базы данных:", error)
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to disconnect from database" },
+      { error: error instanceof Error ? error.message : "Не удалось отключиться от базы данных" },
       { status: 500 },
     )
   }
