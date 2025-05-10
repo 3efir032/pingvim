@@ -173,38 +173,8 @@ export default function Home() {
     folders: FolderType[]
     files: FileType[]
   }>("pycharm-file-system", {
-    folders: [
-      { id: "1", name: "Notes", isOpen: true, parentId: null },
-      { id: "2", name: "src", isOpen: true, parentId: "1" },
-      { id: "3", name: "1", isOpen: true, parentId: "2" },
-      { id: "4", name: "123", isOpen: true, parentId: "3" },
-    ],
-    files: [
-      {
-        id: "1",
-        name: "notes.txt",
-        content: "# Welcome to PingVim\n\nStart typing your notes here...",
-        parentId: "2",
-      },
-      {
-        id: "2",
-        name: "2",
-        content: "This is file 2",
-        parentId: "2",
-      },
-      {
-        id: "3",
-        name: "123",
-        content: "123",
-        parentId: "4",
-      },
-      {
-        id: "4",
-        name: "23",
-        content: "23",
-        parentId: "4",
-      },
-    ],
+    folders: [{ id: "1", name: "Notes", isOpen: true, parentId: null }],
+    files: [],
   })
 
   // После других useRef
@@ -540,6 +510,12 @@ export default function Home() {
   }
 
   const openDeleteDialog = (type: "file" | "folder", id: string) => {
+    // Запрещаем удаление корневой папки Notes (id: "1")
+    if (type === "folder" && id === "1") {
+      alert("Корневую папку нельзя удалить")
+      return
+    }
+
     setItemToDelete({
       id,
       type,
@@ -907,6 +883,16 @@ export default function Home() {
                 className="p-1 hover:bg-gray-600"
                 onClick={(e) => {
                   e.stopPropagation()
+                  openNewFolderDialog(folder.id)
+                }}
+                title="New Folder"
+              >
+                <Folder className="h-3 w-3" />
+              </button>
+              <button
+                className="p-1 hover:bg-gray-600"
+                onClick={(e) => {
+                  e.stopPropagation()
                   openNewFileDialog(folder.id)
                 }}
                 title="New File"
@@ -923,16 +909,18 @@ export default function Home() {
               >
                 <Edit className="h-3 w-3" />
               </button>
-              <button
-                className="p-1 hover:bg-gray-600"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  openDeleteDialog("folder", folder.id)
-                }}
-                title="Delete"
-              >
-                <Trash className="h-3 w-3" />
-              </button>
+              {folder.id !== "1" && (
+                <button
+                  className="p-1 hover:bg-gray-600"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    openDeleteDialog("folder", folder.id)
+                  }}
+                  title="Delete"
+                >
+                  <Trash className="h-3 w-3" />
+                </button>
+              )}
             </div>
           </div>
 
@@ -997,7 +985,7 @@ export default function Home() {
     return (
       <div className="p-2">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-sm font-medium">Cluster</span>
+          <span className="text-sm font-medium">Notes</span>
           <div className="flex space-x-1">
             <button
               className="p-1 hover:bg-gray-600 rounded"
