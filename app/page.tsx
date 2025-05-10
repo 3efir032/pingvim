@@ -19,6 +19,8 @@ import {
   X,
   Download,
   Upload,
+  Database,
+  ServerOffIcon as DatabaseOff,
 } from "lucide-react"
 import { useLocalStorage } from "@/hooks/use-local-storage"
 import Editor from "@/components/editor"
@@ -29,6 +31,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import dbService, { type ConnectionStatus } from "@/services/db-service"
+import DbConnectionDialog from "@/components/db-connection-dialog"
 
 export default function Home() {
   // Состояние авторизации
@@ -42,6 +46,10 @@ export default function Home() {
   const [passwordError, setPasswordError] = useState("")
   const [oldPassword, setOldPassword] = useState("")
   const [disablePassword, setDisablePassword] = useState(false)
+
+  // Add these state variables after the other useState declarations
+  const [dbConnectionOpen, setDbConnectionOpen] = useState(false)
+  const [dbStatus, setDbStatus] = useState<ConnectionStatus>("disconnected")
 
   // Проверяем авторизацию при загрузке страницы
   useEffect(() => {
@@ -244,6 +252,32 @@ export default function Home() {
     setRightActiveFile,
     setSplitView,
   ])
+
+  // Add this useEffect to listen for database status changes
+  useEffect(() => {
+    const removeListener = dbService.addStatusListener((status) => {
+      setDbStatus(status)
+    })
+
+    return removeListener
+  }, [])
+
+  // Add this function to handle saving to database
+  const saveToDatabase = async () => {
+    if (dbStatus === "connected") {
+      await dbService.saveFileSystem(fileSystem)
+    }
+  }
+
+  // Add this function to handle loading from database
+  const loadFromDatabase = async () => {
+    if (dbStatus === "connected") {
+      const data = await dbService.loadFileSystem()
+      if (data) {
+        setFileSystem(data)
+      }
+    }
+  }
 
   // Найдем и заменим функцию initResizer и соответствующий useLayoutEffect
 
@@ -671,35 +705,30 @@ export default function Home() {
     }))
   }
 
-  const exportData = () => {
+  // Modify the exportData function to also save to database if connected
+  const exportData = async () => {
     try {
-      // Создаем объект с текущими данными и метаданными
+      // Save to database if connected
+      if (dbStatus === "connected") {
+        await saveToDatabase()
+      }
+
+      // Original export code
       const exportData = {
         version: "1.0",
         timestamp: new Date().toISOString(),
         data: fileSystem,
       }
 
-      // Преобразуем данные в JSON-строку
       const jsonString = JSON.stringify(exportData, null, 2)
-
-      // Создаем Blob с данными
       const blob = new Blob([jsonString], { type: "application/json" })
-
-      // Создаем URL для скачивания
       const url = URL.createObjectURL(blob)
-
-      // Создаем временную ссылку для скачивания
       const link = document.createElement("a")
       link.href = url
       link.download = `pingvim-data-${new Date().toISOString().slice(0, 10)}.json`
-
-      // Добавляем ссылку в DOM, кликаем по ней и удаляем
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
-
-      // Освобождаем URL
       URL.revokeObjectURL(url)
     } catch (error) {
       console.error("Ошибка при экспорте данных:", error)
@@ -1009,6 +1038,23 @@ export default function Home() {
             <button className="p-1 hover:bg-gray-600 rounded" onClick={exportData} title="Экспорт данных">
               <Download className="h-3 w-3" />
             </button>
+            // Add these buttons to the file explorer header, in the div with the Upload/Download buttons
+            <button
+              className={`p-1 hover:bg-gray-600 rounded ${dbStatus !== "connected" ? "opacity-50" : ""}`}
+              onClick={loadFromDatabase}
+              disabled={dbStatus !== "connected"}
+              title="Load from Database"
+            >
+              <Database className="h-3 w-3" />
+            </button>
+            <button
+              className={`p-1 hover:bg-gray-600 rounded ${dbStatus !== "connected" ? "opacity-50" : ""}`}
+              onClick={saveToDatabase}
+              disabled={dbStatus !== "connected"}
+              title="Save to Database"
+            >
+              <Database className="h-3 w-3" />
+            </button>
             <button
               className="p-1 hover:bg-gray-600 rounded"
               onClick={() => openNewFolderDialog(rootFolders[0]?.id || "")}
@@ -1175,6 +1221,14 @@ export default function Home() {
 
         <div className="ml-auto flex items-center">
           <input type="file" ref={fileInputRef} className="hidden" accept=".json" onChange={importData} />
+          // Add this to the toolbar section, right before the User dropdown
+          <button
+            className={`p-2 hover:bg-gray-600 ${dbStatus === "connected" ? "text-green-500" : ""}`}
+            onClick={() => setDbConnectionOpen(true)}
+            title={dbStatus === "connected" ? "Database Connected" : "Database Disconnected"}
+          >
+            {dbStatus === "connected" ? <Database className="h-4 w-4" /> : <DatabaseOff className="h-4 w-4" />}
+          </button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button className="p-2 hover:bg-gray-600" title="Меню пользователя">
@@ -1208,7 +1262,6 @@ export default function Home() {
           </button>
         </div>
       </div>
-
       <div className="flex flex-1 overflow-hidden">
         {/* Left sidebar - Project explorer */}
         <div
@@ -1337,10 +1390,8 @@ export default function Home() {
           </div>
         </div>
       </div>
-
       {/* Status bar */}
       <StatusBar />
-
       {/* Settings Menu */}
       {settingsOpen && (
         <div
@@ -1376,7 +1427,6 @@ export default function Home() {
           </div>
         </div>
       )}
-
       {/* Change Password Dialog */}
       <Dialog open={changePasswordOpen} onOpenChange={setChangePasswordOpen}>
         <DialogContent className="bg-[#1B1C1F] border-gray-700 text-gray-300 p-0">
@@ -1458,7 +1508,6 @@ export default function Home() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
       {/* New Item Dialog */}
       <Dialog open={newItemDialogOpen} onOpenChange={setNewItemDialogOpen}>
         <DialogContent className="bg-[#1B1C1F] border-gray-700 text-gray-300 p-0">
@@ -1488,7 +1537,6 @@ export default function Home() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
       {/* Rename Dialog */}
       <Dialog open={renameDialogOpen} onOpenChange={setRenameDialogOpen}>
         <DialogContent className="bg-[#1B1C1F] border-gray-700 text-gray-300 p-0">
@@ -1518,7 +1566,6 @@ export default function Home() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
       {/* Delete Confirmation Dialog */}
       <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
         <DialogContent className="bg-[#1B1C1F] border-gray-700 text-gray-300 p-0">
@@ -1545,6 +1592,8 @@ export default function Home() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      // Add this at the end of the component, right before the closing return statement
+      <DbConnectionDialog open={dbConnectionOpen} onOpenChange={setDbConnectionOpen} />
     </div>
   )
 }
