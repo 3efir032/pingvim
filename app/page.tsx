@@ -985,7 +985,7 @@ export default function Home() {
     return (
       <div className="p-2">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-sm font-medium">Notes</span>
+          <span className="text-sm font-medium">Local storage</span>
           <div className="flex space-x-1">
             <button
               className="p-1 hover:bg-gray-600 rounded"
