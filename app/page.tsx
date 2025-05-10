@@ -19,19 +19,24 @@ import {
   X,
   Download,
   Upload,
+  Database,
+  AlertCircle,
+  Save,
 } from "lucide-react"
-import { useLocalStorage } from "@/hooks/use-local-storage"
+import { useLocalStorage } from "@/hooks/use-local-storage" // Восстановлен импорт
 import Editor from "@/components/editor"
 import StatusBar from "@/components/status-bar"
 import AuthPage from "@/components/auth-page"
+import DbInitializer from "@/components/db-initializer"
+import { useFileSystem } from "@/hooks/use-file-system"
 import type { FileType, FolderType } from "@/types/file-system"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import DbConnectionDialog from "@/components/db-connection-dialog"
-import DbStatus from "@/components/db-status"
-import { fetchFileSystemFromDb, syncDataWithDatabase } from "@/app/actions/db-actions"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+// Добавьте импорт нового компонента
+import ConnectionStatus from "@/components/connection-status"
 
 export default function Home() {
   // Состояние авторизации
@@ -45,6 +50,180 @@ export default function Home() {
   const [passwordError, setPasswordError] = useState("")
   const [oldPassword, setOldPassword] = useState("")
   const [disablePassword, setDisablePassword] = useState(false)
+
+  // Состояние подключения к базе данных
+  const [dbInitialized, setDbInitialized] = useState(false)
+  const [dbError, setDbError] = useState<string | null>(null)
+  const [showDbInitializer, setShowDbInitializer] = useState(false)
+  const [showDbStatus, setShowDbStatus] = useState(false)
+  const [useLocalStorageMode, setUseLocalStorageMode] = useState(false)
+
+  const [dbConnectionStatus, setDbConnectionStatus] = useState<"connected" | "error" | "local" | "connecting">(
+    "connecting",
+  )
+
+  // Track open files for left pane
+  const [leftPaneFiles, setLeftPaneFiles] = useLocalStorage<string[]>("pycharm-left-pane-files", [])
+  // Track open files for right pane
+  const [rightPaneFiles, setRightPaneFiles] = useLocalStorage<string[]>("pycharm-right-pane-files", [])
+  // Track the currently active file in left pane
+  const [leftActiveFile, setLeftActiveFile] = useLocalStorage<string | null>("pycharm-left-active-file", null)
+  // Track the currently active file in right pane
+  const [rightActiveFile, setRightActiveFile] = useLocalStorage<string | null>("pycharm-right-active-file", null)
+  // Track if we're in split view mode
+  const [splitView, setSplitView] = useLocalStorage<boolean>("pycharm-split-view", false)
+  // Track editor settings
+  const [fontSize, setFontSize] = useLocalStorage<number>("pycharm-font-size", 14)
+  // Track split ratio
+  const [splitRatio, setSplitRatio] = useLocalStorage<number>("pycharm-split-ratio", 50) // 50% for left pane
+
+  // Track which tab is being dragged
+  const [draggedTab, setDraggedTab] = useState<{ pane: "left" | "right"; fileId: string } | null>(null)
+  // Track settings menu open state
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  // Reference to the settings button
+  const settingsButtonRef = useRef<HTMLButtonElement>(null)
+
+  // Track search state
+  const [searchTerm, setSearchTerm] = useState("")
+  const [searchResults, setSearchResults] = useState<FileType[]>([])
+
+  // Dialog states
+  const [newItemDialogOpen, setNewItemDialogOpen] = useState(false)
+  const [newItemType, setNewItemType] = useState<"file" | "folder">("file")
+  const [newItemName, setNewItemName] = useState("")
+  const [newItemParentId, setNewItemParentId] = useState<string | null>(null)
+
+  const [renameDialogOpen, setRenameDialogOpen] = useState(false)
+  const [itemToRename, setItemToRename] = useState<{
+    id: string
+    type: "file" | "folder"
+    name: string
+  } | null>(null)
+  const [newName, setNewName] = useState("")
+
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
+  const [itemToDelete, setItemToDelete] = useState<{
+    id: string
+    type: "file" | "folder"
+  } | null>(null)
+
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [sidebarWidth, setSidebarWidth] = useState(256) // 256px = 64 * 4 (w-64)
+  const sidebarWidthRef = useRef(256)
+  const sidebarRef = useRef<HTMLDivElement>(null)
+  const isResizingRef = useRef(false)
+  const minWidth = 200
+  const collapsedWidth = 50
+
+  // Split view resizing
+  const splitRatioRef = useRef(50)
+  const leftPaneRef = useRef<HTMLDivElement>(null)
+  const rightPaneRef = useRef<HTMLDivElement>(null)
+  const contentAreaRef = useRef<HTMLDivElement>(null)
+  const isSplitResizingRef = useRef(false)
+  const minSplitWidth = 20 // Minimum percentage for each pane
+
+  // После других useRef
+  const toolbarRef = useRef<HTMLDivElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Используем хук для работы с файловой системой
+  const {
+    fileSystem,
+    loading: fileSystemLoading,
+    error: fileSystemError,
+    useLocalStorage: fsUseLocalStorage,
+    loadFileSystem,
+    createFile,
+    updateFile,
+    deleteFile,
+    createFolder,
+    updateFolder,
+    deleteFolder,
+    toggleFolderOpen,
+    switchToLocalStorage,
+  } = useFileSystem()
+
+  // Добавляем обработчик для кнопки переключения режима хранения
+  const handleStorageModeToggle = () => {
+    if (useLocalStorageMode) {
+      // Если мы в режиме локального хранилища, пробуем подключиться к базе данных
+      setDbConnectionStatus("connecting")
+      loadFileSystem()
+    } else {
+      // Если мы в режиме базы данных, переключаемся на локальное хранилище
+      switchToLocalStorage()
+    }
+  }
+
+  // Синхронизируем состояние режима хранения
+  useEffect(() => {
+    setUseLocalStorageMode(fsUseLocalStorage)
+    if (fsUseLocalStorage) {
+      setDbConnectionStatus("local")
+    } else if (fileSystemError) {
+      setDbConnectionStatus("error")
+    } else if (fileSystemLoading) {
+      setDbConnectionStatus("connecting")
+    } else {
+      setDbConnectionStatus("connected")
+    }
+  }, [fsUseLocalStorage, fileSystemError, fileSystemLoading, setDbConnectionStatus])
+
+  // Периодическая проверка состояния подключения к базе данных
+  useEffect(() => {
+    // Функция для проверки состояния подключения
+    const checkDbConnection = async () => {
+      if (useLocalStorageMode) {
+        // Если мы уже в режиме локального хранилища, не проверяем подключение
+        return
+      }
+
+      try {
+        // Проверяем подключение к базе данных
+        const response = await fetch("/api/init-db", {
+          method: "GET",
+          headers: {
+            "Cache-Control": "no-cache",
+          },
+        }).catch((err) => {
+          console.error("Ошибка при проверке подключения:", err)
+          setDbConnectionStatus("error")
+          return null
+        })
+
+        if (!response) return
+
+        if (!response.ok) {
+          console.error(`Ошибка сервера при проверке подключения: ${response.status}`)
+          setDbConnectionStatus("error")
+          return
+        }
+
+        const data = await response.json()
+
+        if (data.success) {
+          setDbConnectionStatus("connected")
+        } else {
+          setDbConnectionStatus("error")
+        }
+      } catch (error) {
+        console.error("Ошибка при проверке подключения:", error)
+        setDbConnectionStatus("error")
+      }
+    }
+
+    // Проверяем подключение при монтировании компонента
+    checkDbConnection()
+
+    // Устанавливаем интервал для периодической проверки
+    const intervalId = setInterval(checkDbConnection, 30000) // Проверка каждые 30 секунд
+
+    return () => {
+      clearInterval(intervalId)
+    }
+  }, [useLocalStorageMode, setDbConnectionStatus])
 
   // Проверяем авторизацию при загрузке страницы
   useEffect(() => {
@@ -112,116 +291,6 @@ export default function Home() {
     setChangePasswordOpen(false)
   }
 
-  // Track open files for left pane
-  const [leftPaneFiles, setLeftPaneFiles] = useLocalStorage<string[]>("pycharm-left-pane-files", [])
-  // Track open files for right pane
-  const [rightPaneFiles, setRightPaneFiles] = useLocalStorage<string[]>("pycharm-right-pane-files", [])
-  // Track the currently active file in left pane
-  const [leftActiveFile, setLeftActiveFile] = useLocalStorage<string | null>("pycharm-left-active-file", null)
-  // Track the currently active file in right pane
-  const [rightActiveFile, setRightActiveFile] = useLocalStorage<string | null>("pycharm-right-active-file", null)
-  // Track if we're in split view mode
-  const [splitView, setSplitView] = useLocalStorage<boolean>("pycharm-split-view", false)
-  // Track which tab is being dragged
-  const [draggedTab, setDraggedTab] = useState<{ pane: "left" | "right"; fileId: string } | null>(null)
-  // Track editor settings
-  const [fontSize, setFontSize] = useLocalStorage<number>("pycharm-font-size", 14)
-  // Track settings menu open state
-  const [settingsOpen, setSettingsOpen] = useState(false)
-
-  // Состояние для диалога подключения к базе данных
-  const [dbConnectionDialogOpen, setDbConnectionDialogOpen] = useState(false)
-  // Состояние для отслеживания подключения к базе данных
-  const [isDbConnected, setIsDbConnected] = useState(false)
-  // Состояние для отслеживания синхронизации с базой данных
-  const [isSyncing, setIsSyncing] = useState(false)
-
-  // Reference to the settings button
-  const settingsButtonRef = useRef<HTMLButtonElement>(null)
-
-  // Track search state
-  const [searchTerm, setSearchTerm] = useState("")
-  const [searchResults, setSearchResults] = useState<FileType[]>([])
-
-  // Dialog states
-  const [newItemDialogOpen, setNewItemDialogOpen] = useState(false)
-  const [newItemType, setNewItemType] = useState<"file" | "folder">("file")
-  const [newItemName, setNewItemName] = useState("")
-  const [newItemParentId, setNewItemParentId] = useState<string | null>(null)
-
-  const [renameDialogOpen, setRenameDialogOpen] = useState(false)
-  const [itemToRename, setItemToRename] = useState<{
-    id: string
-    type: "file" | "folder"
-    name: string
-  } | null>(null)
-  const [newName, setNewName] = useState("")
-
-  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
-  const [itemToDelete, setItemToDelete] = useState<{
-    id: string
-    type: "file" | "folder"
-  } | null>(null)
-
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const [sidebarWidth, setSidebarWidth] = useState(256) // 256px = 64 * 4 (w-64)
-  const sidebarWidthRef = useRef(256)
-  const sidebarRef = useRef<HTMLDivElement>(null)
-  const isResizingRef = useRef(false)
-  const minWidth = 200
-  const collapsedWidth = 50
-
-  // Split view resizing
-  const [splitRatio, setSplitRatio] = useLocalStorage<number>("pycharm-split-ratio", 50) // 50% for left pane
-  const splitRatioRef = useRef(50)
-  const leftPaneRef = useRef<HTMLDivElement>(null)
-  const rightPaneRef = useRef<HTMLDivElement>(null)
-  const contentAreaRef = useRef<HTMLDivElement>(null)
-  const isSplitResizingRef = useRef(false)
-  const minSplitWidth = 20 // Minimum percentage for each pane
-
-  const [fileSystem, setFileSystem] = useLocalStorage<{
-    folders: FolderType[]
-    files: FileType[]
-  }>("pycharm-file-system", {
-    folders: [
-      { id: "1", name: "Notes", isOpen: true, parentId: null },
-      { id: "2", name: "src", isOpen: true, parentId: "1" },
-      { id: "3", name: "1", isOpen: true, parentId: "2" },
-      { id: "4", name: "123", isOpen: true, parentId: "3" },
-    ],
-    files: [
-      {
-        id: "1",
-        name: "notes.txt",
-        content: "# Welcome to PingVim\n\nStart typing your notes here...",
-        parentId: "2",
-      },
-      {
-        id: "2",
-        name: "2",
-        content: "This is file 2",
-        parentId: "2",
-      },
-      {
-        id: "3",
-        name: "123",
-        content: "123",
-        parentId: "4",
-      },
-      {
-        id: "4",
-        name: "23",
-        content: "23",
-        parentId: "4",
-      },
-    ],
-  })
-
-  // После других useRef
-  const toolbarRef = useRef<HTMLDivElement>(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
-
   // Enable split view if there are files in the right pane
   useEffect(() => {
     if (rightPaneFiles.length > 0 && !splitView) {
@@ -255,11 +324,6 @@ export default function Home() {
     setRightActiveFile,
     setSplitView,
   ])
-
-  // Найдем и заменим функцию initResizer и соответствующий useLayoutEffect
-
-  // Заменим функцию initResizer на следующую:
-  // Удалите существующую функцию initResizer и useEffect, связанный с ней
 
   // Добавьте этот новый useEffect сразу после объявления всех useRef
   useEffect(() => {
@@ -396,9 +460,7 @@ export default function Home() {
     return () => {
       splitResizer.removeEventListener("mousedown", onMouseDown)
     }
-  }, [splitView, splitRatio, minSplitWidth])
-
-  // Инициализация изменения размера
+  }, [splitView, splitRatio, minSplitWidth, setSplitRatio])
 
   // Инициализация изменения размера split view
   useLayoutEffect(() => {
@@ -406,8 +468,6 @@ export default function Home() {
       return initSplitResizer()
     }
   }, [initSplitResizer, splitView])
-
-  // Применяем градиент к боковой панели
 
   const toggleSidebar = () => {
     setSidebarCollapsed(!sidebarCollapsed)
@@ -512,11 +572,9 @@ export default function Home() {
     }
   }
 
-  const handleFileContentChange = (fileId: string, newContent: string) => {
-    setFileSystem((prev) => ({
-      ...prev,
-      files: prev.files.map((file) => (file.id === fileId ? { ...file, content: newContent } : file)),
-    }))
+  const handleFileContentChange = async (fileId: string, newContent: string) => {
+    // Обновляем содержимое файла в базе данных
+    await updateFile(fileId, { content: newContent })
   }
 
   // File operations
@@ -531,7 +589,6 @@ export default function Home() {
     setNewItemType("folder")
     setNewItemName("")
     setNewItemParentId(parentId)
-    setNewItemDialogOpen(true)
     setNewItemDialogOpen(true)
   }
 
@@ -558,64 +615,38 @@ export default function Home() {
     setDeleteConfirmOpen(true)
   }
 
-  const createNewItem = () => {
+  const createNewItem = async () => {
     if (!newItemName.trim() || !newItemParentId) {
       setNewItemDialogOpen(false)
       return
     }
 
     if (newItemType === "file") {
-      const newFile = {
-        id: Date.now().toString(),
-        name: newItemName,
-        content: "",
-        parentId: newItemParentId,
-      }
-
-      setFileSystem((prev) => ({
-        ...prev,
-        files: [...prev.files, newFile],
-      }))
+      await createFile(newItemName, newItemParentId)
     } else {
-      const newFolder = {
-        id: Date.now().toString(),
-        name: newItemName,
-        isOpen: false,
-        parentId: newItemParentId,
-      }
-
-      setFileSystem((prev) => ({
-        ...prev,
-        folders: [...prev.folders, newFolder],
-      }))
+      await createFolder(newItemName, newItemParentId)
     }
 
     setNewItemDialogOpen(false)
   }
 
-  const renameItem = () => {
+  const renameItem = async () => {
     if (!itemToRename || !newName.trim()) {
       setRenameDialogOpen(false)
       return
     }
 
     if (itemToRename.type === "file") {
-      setFileSystem((prev) => ({
-        ...prev,
-        files: prev.files.map((file) => (file.id === itemToRename.id ? { ...file, name: newName } : file)),
-      }))
+      await updateFile(itemToRename.id, { name: newName })
     } else {
-      setFileSystem((prev) => ({
-        ...prev,
-        folders: prev.folders.map((folder) => (folder.id === itemToRename.id ? { ...folder, name: newName } : folder)),
-      }))
+      await updateFolder(itemToRename.id, { name: newName })
     }
 
     setRenameDialogOpen(false)
     setItemToRename(null)
   }
 
-  const deleteItem = () => {
+  const deleteItem = async () => {
     if (!itemToDelete) {
       setDeleteConfirmOpen(false)
       return
@@ -630,33 +661,25 @@ export default function Home() {
         handleCloseFile("right", itemToDelete.id)
       }
 
-      setFileSystem((prev) => ({
-        ...prev,
-        files: prev.files.filter((file) => file.id !== itemToDelete.id),
-      }))
+      await deleteFile(itemToDelete.id)
     } else {
-      // Delete folder and all its contents recursively
-      const foldersToDelete = [itemToDelete.id]
-      const filesToDelete: string[] = []
+      // Получаем все файлы в этой папке и ее подпапках
+      const foldersToCheck = [itemToDelete.id]
+      const filesToClose: string[] = []
 
-      // Find all subfolders
-      const checkFolders = [itemToDelete.id]
-      while (checkFolders.length > 0) {
-        const currentFolderId = checkFolders.shift()!
-        const childFolders = fileSystem.folders.filter((f) => f.parentId === currentFolderId)
+      // Находим все подпапки
+      while (foldersToCheck.length > 0) {
+        const folderId = foldersToCheck.shift()!
+        const childFolders = fileSystem.folders.filter((f) => f.parentId === folderId)
+        foldersToCheck.push(...childFolders.map((f) => f.id))
 
-        childFolders.forEach((folder) => {
-          foldersToDelete.push(folder.id)
-          checkFolders.push(folder.id)
-        })
-
-        // Find all files in this folder
-        const childFiles = fileSystem.files.filter((f) => f.parentId === currentFolderId)
-        filesToDelete.push(...childFiles.map((f) => f.id))
+        // Находим все файлы в текущей папке
+        const filesInFolder = fileSystem.files.filter((f) => f.parentId === folderId)
+        filesToClose.push(...filesInFolder.map((f) => f.id))
       }
 
-      // Close any open files that are being deleted
-      filesToDelete.forEach((fileId) => {
+      // Закрываем все открытые файлы, которые будут удалены
+      filesToClose.forEach((fileId) => {
         if (leftPaneFiles.includes(fileId)) {
           handleCloseFile("left", fileId)
         }
@@ -665,30 +688,28 @@ export default function Home() {
         }
       })
 
-      setFileSystem((prev) => ({
-        folders: prev.folders.filter((folder) => !foldersToDelete.includes(folder.id)),
-        files: prev.files.filter((file) => !filesToDelete.includes(file.id)),
-      }))
+      await deleteFolder(itemToDelete.id)
     }
 
     setDeleteConfirmOpen(false)
     setItemToDelete(null)
   }
 
-  const toggleFolderOpen = (folderId: string) => {
-    setFileSystem((prev) => ({
-      ...prev,
-      folders: prev.folders.map((folder) => (folder.id === folderId ? { ...folder, isOpen: !folder.isOpen } : folder)),
-    }))
-  }
-
-  const exportData = () => {
+  const exportData = async () => {
     try {
+      // Получаем актуальные данные из базы данных
+      const response = await fetch("/api/file-system")
+      const data = await response.json()
+
+      if (!data.success) {
+        throw new Error(data.error || "Не удалось получить данные")
+      }
+
       // Создаем объект с текущими данными и метаданными
       const exportData = {
         version: "1.0",
         timestamp: new Date().toISOString(),
-        data: fileSystem,
+        data: data.fileSystem,
       }
 
       // Преобразуем данные в JSON-строку
@@ -718,22 +739,24 @@ export default function Home() {
     }
   }
 
-  const importData = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const importData = async (event: React.ChangeEvent<HTMLInputElement>) => {
     try {
       const file = event.target.files?.[0]
       if (!file) return
 
       const reader = new FileReader()
 
-      reader.onload = (e) => {
+      reader.onload = async (e) => {
         try {
           const content = e.target?.result as string
           const importedData = JSON.parse(content)
 
           // Проверяем структуру данных
           if (importedData.data && Array.isArray(importedData.data.folders) && Array.isArray(importedData.data.files)) {
-            // Обновляем состояние fileSystem
-            setFileSystem(importedData.data)
+            // Здесь нужно реализовать импорт данных в базу данных
+            // Это потребует создания нового API-эндпоинта для импорта
+
+            alert("Импорт данных в базу данных не реализован в этой версии")
 
             // Сбрасываем открытые файлы, так как их ID могут не совпадать
             setLeftPaneFiles([])
@@ -741,7 +764,8 @@ export default function Home() {
             setLeftActiveFile(null)
             setRightActiveFile(null)
 
-            alert("Данные успешно импортированы")
+            // Перезагружаем данные из базы
+            await loadFileSystem()
           } else {
             throw new Error("Неверный формат данных")
           }
@@ -764,110 +788,6 @@ export default function Home() {
   // Toggle settings menu
   const toggleSettingsMenu = () => {
     setSettingsOpen((prev) => !prev)
-  }
-
-  // Функция для загрузки данных из базы данных
-  const loadDataFromDb = async () => {
-    try {
-      const result = await fetchFileSystemFromDb()
-
-      if (result.success && result.data) {
-        // Проверяем, не пуста ли база данных
-        if (result.data.folders.length === 0 && result.data.files.length === 0) {
-          // Если база пуста, синхронизируем текущие локальные данные с базой
-          await syncDataWithDatabase(fileSystem)
-          // Не обновляем локальное состояние, так как мы только что отправили наши данные в базу
-          return true
-        }
-
-        // Если в базе есть данные, обновляем локальное состояние
-        setFileSystem(result.data)
-
-        // Сбрасываем открытые файлы, так как их ID могут не совпадать
-        setLeftPaneFiles([])
-        setRightPaneFiles([])
-        setLeftActiveFile(null)
-        setRightActiveFile(null)
-
-        return true
-      }
-
-      return false
-    } catch (error) {
-      console.error("Ошибка загрузки данных из базы данных:", error)
-      return false
-    }
-  }
-
-  // Функция для синхронизации данных с базой данных
-  const syncDataWithDb = async () => {
-    if (!isDbConnected) return false
-
-    setIsSyncing(true)
-
-    try {
-      const result = await syncDataWithDatabase(fileSystem)
-      return result.success
-    } catch (error) {
-      console.error("Ошибка синхронизации данных с базой данных:", error)
-      return false
-    } finally {
-      setIsSyncing(false)
-    }
-  }
-
-  // Эффект для автоматической синхронизации данных с базой данных
-  useEffect(() => {
-    if (isDbConnected) {
-      // Используем debounce для предотвращения слишком частых запросов
-      const timer = setTimeout(() => {
-        syncDataWithDb()
-      }, 2000)
-
-      return () => clearTimeout(timer)
-    }
-  }, [fileSystem, isDbConnected])
-
-  // Функция для обработки изменения статуса подключения к базе данных
-  const handleDbConnectionStatus = async (connected: boolean) => {
-    setIsDbConnected(connected)
-
-    if (connected) {
-      // Если подключились к базе данных, загружаем данные
-      await loadDataFromDb()
-    }
-  }
-
-  // Функция для обработки успешного подключения к базе данных
-  const handleDbConnected = async () => {
-    setIsDbConnected(true)
-
-    // Загружаем данные из базы данных
-    const result = await fetchFileSystemFromDb()
-
-    // Проверяем, есть ли данные в базе
-    if (result.success && result.data) {
-      // Проверяем, не пуста ли база данных (нет папок или файлов)
-      if (result.data.folders.length === 0 && result.data.files.length === 0) {
-        // Если база пуста, синхронизируем текущие локальные данные с базой
-        await syncDataWithDatabase(fileSystem)
-        // Не обновляем локальное состояние, так как мы только что отправили наши данные в базу
-      } else {
-        // Если в базе есть данные, обновляем локальное состояние
-        setFileSystem(result.data)
-
-        // Сбрасываем открытые файлы, так как их ID могут не совпадать
-        setLeftPaneFiles([])
-        setRightPaneFiles([])
-        setLeftActiveFile(null)
-        setRightActiveFile(null)
-      }
-      return true
-    } else {
-      // Если не удалось загрузить данные, синхронизируем локальные данные с базой данных
-      await syncDataWithDatabase(fileSystem)
-      return false
-    }
   }
 
   // Drag and drop handlers
@@ -922,7 +842,6 @@ export default function Home() {
       if (!leftPaneFiles.includes(fileId)) {
         setLeftPaneFiles((prev) => [...prev, fileId])
       }
-      setLeftPaneFiles((prev) => [...prev, fileId])
 
       // Make it active in left pane
       setLeftActiveFile(fileId)
@@ -1214,6 +1133,65 @@ export default function Home() {
     return <AuthPage onAuth={(success) => setIsAuthenticated(success)} defaultPassword={savedPassword} />
   }
 
+  // Если показываем инициализатор базы данных
+  if (showDbInitializer) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-[#1B1C1F] p-4">
+        <div className="w-full max-w-md">
+          <DbInitializer
+            onUseLocalStorage={() => {
+              switchToLocalStorage()
+              setShowDbStatus(false)
+            }}
+          />
+          <Button
+            className="mt-4 w-full bg-[#2E436E] hover:bg-[#3A5488]"
+            onClick={() => {
+              setShowDbInitializer(false)
+              loadFileSystem()
+            }}
+          >
+            Продолжить работу
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
+  // Если есть ошибка загрузки файловой системы
+  if (fileSystemError) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-[#1B1C1F] p-4">
+        <Alert variant="destructive" className="mb-4">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Ошибка</AlertTitle>
+          <AlertDescription>Не удалось загрузить данные из базы данных. {fileSystemError}</AlertDescription>
+        </Alert>
+        <Button
+          className="mt-4 bg-[#2E436E] hover:bg-[#3A5488]"
+          onClick={() => {
+            setShowDbInitializer(true)
+          }}
+        >
+          Настроить подключение к базе данных
+        </Button>
+      </div>
+    )
+  }
+
+  // Если данные загружаются
+  if (fileSystemLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-[#1B1C1F]">
+        <div className="animate-spin h-8 w-8 border-4 border-[#2E436E] border-t-transparent rounded-full mb-4"></div>
+        <p className="text-gray-300">Загрузка данных...</p>
+      </div>
+    )
+  }
+
+  // В компоненте Home добавьте следующий код перед return:
+
+  // Добавьте этот код в конце JSX, перед закрывающим тегом </div> основного контейнера
   return (
     <div className="flex flex-col h-screen bg-[#2b2b2b] text-gray-300 overflow-hidden">
       {/* Top toolbar */}
@@ -1285,15 +1263,41 @@ export default function Home() {
 
           <div className="flex items-center px-1.5 py-1 hover:bg-[#2E436E] cursor-pointer">
             <span className="font-medium text-white">PingVim</span>
+            <div
+              className={`ml-2 w-3 h-3 rounded-full ${
+                dbConnectionStatus === "connected"
+                  ? "bg-green-500"
+                  : dbConnectionStatus === "error"
+                    ? "bg-red-500"
+                    : dbConnectionStatus === "local"
+                      ? "bg-yellow-500"
+                      : "bg-gray-500"
+              }`}
+              title={
+                dbConnectionStatus === "connected"
+                  ? "База данных подключена"
+                  : dbConnectionStatus === "error"
+                    ? "Ошибка подключения к базе данных"
+                    : dbConnectionStatus === "local"
+                      ? "Используется локальное хранилище"
+                      : "Подключение к базе данных..."
+              }
+            ></div>
           </div>
+
+          <button
+            className={`ml-4 px-2 py-1 flex items-center text-xs ${
+              useLocalStorageMode ? "bg-yellow-600 hover:bg-yellow-700" : "bg-[#2E436E] hover:bg-[#3A5488]"
+            } rounded`}
+            onClick={handleStorageModeToggle}
+          >
+            {useLocalStorageMode ? <Save className="h-3 w-3 mr-1" /> : <Database className="h-3 w-3 mr-1" />}
+            {useLocalStorageMode ? "Локальное хранилище" : "База данных"}
+          </button>
         </div>
 
         <div className="ml-auto flex items-center">
           <input type="file" ref={fileInputRef} className="hidden" accept=".json" onChange={importData} />
-          <DbStatus
-            onOpenConnectionDialog={() => setDbConnectionDialogOpen(true)}
-            onStatusChange={handleDbConnectionStatus}
-          />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button className="p-2 hover:bg-gray-600" title="Меню пользователя">
@@ -1497,88 +1501,6 @@ export default function Home() {
       )}
 
       {/* Change Password Dialog */}
-      {/* Change Password Dialog */}
-      <Dialog open={changePasswordOpen} onOpenChange={setChangePasswordOpen}>
-        <DialogContent className="bg-[#1B1C1F] border-gray-700 text-gray-300 p-0">
-          <DialogHeader className="p-4 border-b border-gray-700">
-            <DialogTitle>Сменить пароль</DialogTitle>
-          </DialogHeader>
-          <div className="p-4 space-y-4">
-            <div>
-              <label className="text-sm text-gray-400 mb-1 block">Текущий пароль</label>
-              <Input
-                type="password"
-                value={oldPassword}
-                onChange={(e) => setOldPassword(e.target.value)}
-                placeholder="Введите текущий пароль"
-                autoFocus
-                className="bg-[#2b2b2b] border-gray-700 text-gray-300"
-              />
-            </div>
-            <div className={disablePassword ? "opacity-50" : ""}>
-              <label className="text-sm text-gray-400 mb-1 block">Новый пароль</label>
-              <Input
-                type="password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="Введите новый пароль"
-                disabled={disablePassword}
-                className="bg-[#2b2b2b] border-gray-700 text-gray-300"
-              />
-            </div>
-            <div className={disablePassword ? "opacity-50" : ""}>
-              <label className="text-sm text-gray-400 mb-1 block">Подтвердите пароль</label>
-              <Input
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="Повторите новый пароль"
-                disabled={disablePassword}
-                className="bg-[#2b2b2b] border-gray-700 text-gray-300"
-              />
-            </div>
-            <div className="flex items-center space-x-2">
-              <input
-                type="checkbox"
-                id="disable-password"
-                checked={disablePassword}
-                onChange={(e) => {
-                  setDisablePassword(e.target.checked)
-                  if (e.target.checked) {
-                    setNewPassword("")
-                    setConfirmPassword("")
-                  }
-                }}
-                className="rounded bg-[#2b2b2b] border-gray-700 text-[#2E436E] focus:ring-[#2E436E]"
-              />
-              <label htmlFor="disable-password" className="text-sm text-gray-300">
-                Отключить защиту паролем
-              </label>
-            </div>
-            {passwordError && <p className="text-red-500 text-sm">{passwordError}</p>}
-          </div>
-          <DialogFooter className="p-4 border-t border-gray-700 bg-[#1B1C1F]">
-            <Button
-              variant="outline"
-              onClick={() => {
-                setChangePasswordOpen(false)
-                setOldPassword("")
-                setNewPassword("")
-                setConfirmPassword("")
-                setPasswordError("")
-                setDisablePassword(false)
-              }}
-              className="bg-[#4b4b4b] text-gray-300 border-gray-700 hover:bg-[#5a5a5a]"
-            >
-              Отмена
-            </Button>
-            <Button onClick={handleChangePassword} className="bg-[#2E436E] text-white hover:bg-[#3A5488]">
-              {disablePassword ? "Отключить пароль" : "Сохранить"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
       {/* New Item Dialog */}
       <Dialog open={newItemDialogOpen} onOpenChange={setNewItemDialogOpen}>
         <DialogContent className="bg-[#1B1C1F] border-gray-700 text-gray-300 p-0">
@@ -1598,18 +1520,18 @@ export default function Home() {
             <Button
               variant="outline"
               onClick={() => setNewItemDialogOpen(false)}
-              className="bg-[#4b4b4b] text-gray-300 border-gray-700 hover:bg-[#5a5a5a]"
+              className="bg-[#4b4d54] hover:bg-[#3f4244] text-gray-300"
             >
               Cancel
             </Button>
-            <Button onClick={createNewItem} className="bg-[#2E436E] text-white hover:bg-[#3A5488]">
+            <Button onClick={createNewItem} className="bg-[#2E436E] hover:bg-[#3A5488]">
               Create
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Rename Dialog */}
+      {/* Rename Item Dialog */}
       <Dialog open={renameDialogOpen} onOpenChange={setRenameDialogOpen}>
         <DialogContent className="bg-[#1B1C1F] border-gray-700 text-gray-300 p-0">
           <DialogHeader className="p-4 border-b border-gray-700">
@@ -1619,7 +1541,7 @@ export default function Home() {
             <Input
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
-              placeholder="Enter new name"
+              placeholder={`Enter new name`}
               autoFocus
               className="bg-[#2b2b2b] border-gray-700 text-gray-300"
             />
@@ -1628,11 +1550,11 @@ export default function Home() {
             <Button
               variant="outline"
               onClick={() => setRenameDialogOpen(false)}
-              className="bg-[#4b4b4b] text-gray-300 border-gray-700 hover:bg-[#5a5a5a]"
+              className="bg-[#4b4d54] hover:bg-[#3f4244] text-gray-300"
             >
               Cancel
             </Button>
-            <Button onClick={renameItem} className="bg-[#2E436E] text-white hover:bg-[#3A5488]">
+            <Button onClick={renameItem} className="bg-[#2E436E] hover:bg-[#3A5488]">
               Rename
             </Button>
           </DialogFooter>
@@ -1643,33 +1565,108 @@ export default function Home() {
       <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
         <DialogContent className="bg-[#1B1C1F] border-gray-700 text-gray-300 p-0">
           <DialogHeader className="p-4 border-b border-gray-700">
-            <DialogTitle>Confirm Delete</DialogTitle>
+            <DialogTitle>Delete Confirmation</DialogTitle>
           </DialogHeader>
           <div className="p-4">
             <p>Are you sure you want to delete this {itemToDelete?.type}?</p>
-            {itemToDelete?.type === "folder" && (
-              <p className="text-red-400 mt-2">Warning: This will delete all files and folders inside.</p>
-            )}
           </div>
           <DialogFooter className="p-4 border-t border-gray-700 bg-[#1B1C1F]">
             <Button
               variant="outline"
               onClick={() => setDeleteConfirmOpen(false)}
-              className="bg-[#4b4b4b] text-gray-300 border-gray-700 hover:bg-[#5a5a5a]"
+              className="bg-[#4b4d54] hover:bg-[#3f4244] text-gray-300"
             >
               Cancel
             </Button>
-            <Button onClick={deleteItem} className="bg-[#ff5370] text-white hover:bg-[#ff3860]">
+            <Button onClick={deleteItem} className="bg-[#2E436E] hover:bg-[#3A5488]">
               Delete
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      {/* Диалог подключения к базе данных */}
-      <DbConnectionDialog
-        open={dbConnectionDialogOpen}
-        onOpenChange={setDbConnectionDialogOpen}
-        onConnected={handleDbConnected}
+
+      {/* Change Password Dialog */}
+      <Dialog open={changePasswordOpen} onOpenChange={setChangePasswordOpen}>
+        <DialogContent className="bg-[#1B1C1F] border-gray-700 text-gray-300 p-0">
+          <DialogHeader className="p-4 border-b border-gray-700">
+            <DialogTitle>Change Password</DialogTitle>
+          </DialogHeader>
+          <div className="p-4 space-y-2">
+            {passwordError && (
+              <Alert variant="destructive">
+                <AlertTitle>Error</AlertTitle>
+                <AlertDescription>{passwordError}</AlertDescription>
+              </Alert>
+            )}
+            <div>
+              <Input
+                type="password"
+                placeholder="Current password"
+                value={oldPassword}
+                onChange={(e) => setOldPassword(e.target.value)}
+                className="bg-[#2b2b2b] border-gray-700 text-gray-300"
+              />
+            </div>
+            <div>
+              <Input
+                type="password"
+                placeholder="New password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                className="bg-[#2b2b2b] border-gray-700 text-gray-300"
+              />
+            </div>
+            <div>
+              <Input
+                type="password"
+                placeholder="Confirm new password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                className="bg-[#2b2b2b] border-gray-700 text-gray-300"
+              />
+            </div>
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="disablePassword"
+                checked={disablePassword}
+                onChange={(e) => setDisablePassword(e.target.checked)}
+                className="h-4 w-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-offset-gray-800 focus:ring-2 dark:bg-gray-700 dark:border-gray-600"
+              />
+              <label htmlFor="disablePassword" className="text-sm font-medium text-gray-300">
+                Disable password
+              </label>
+            </div>
+          </div>
+          <DialogFooter className="p-4 border-t border-gray-700 bg-[#1B1C1F]">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setChangePasswordOpen(false)
+                setPasswordError("")
+                setOldPassword("")
+                setNewPassword("")
+                setConfirmPassword("")
+                setDisablePassword(false)
+              }}
+              className="bg-[#4b4d54] hover:bg-[#3f4244] text-gray-300"
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleChangePassword} className="bg-[#2E436E] hover:bg-[#3A5488]">
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Добавьте этот компонент в конце, перед закрывающим тегом </div> */}
+      <ConnectionStatus
+        status={dbConnectionStatus}
+        lastError={fileSystemError}
+        lastErrorTime={null}
+        onRetryConnection={loadFileSystem}
+        onSwitchToLocalStorage={switchToLocalStorage}
       />
     </div>
   )

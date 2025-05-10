@@ -3,6 +3,8 @@ export interface FileType {
   name: string
   content: string
   parentId: string | null
+  createdAt?: string
+  updatedAt?: string
 }
 
 export interface FolderType {
@@ -10,6 +12,8 @@ export interface FolderType {
   name: string
   isOpen: boolean
   parentId: string | null
+  createdAt?: string
+  updatedAt?: string
 }
 
 export interface OpenFileType {
@@ -17,8 +21,13 @@ export interface OpenFileType {
   isPrimary: boolean
 }
 
-// Добавьте новое поле для отслеживания источника данных
-export interface FileSystemMetadata {
-  source: "local" | "database"
-  lastSyncTime?: string
+export interface FileSystemType {
+  folders: FolderType[]
+  files: FileType[]
+}
+
+export interface ApiResponse<T> {
+  success: boolean
+  error?: string
+  data?: T
 }
