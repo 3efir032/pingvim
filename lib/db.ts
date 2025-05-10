@@ -4,11 +4,30 @@ import { Pool } from "pg"
 let isDbConnected = false
 
 // Используем переменную окружения для подключения к базе данных
-const connectionString =
+let connectionString =
   process.env.DATABASE_URL || "postgresql://postgres:ghz!zgw6qkt1cqb6AWP@91.203.233.176:5432/postgres"
 
 // Создаем пул соединений с таймаутом
 let pool: Pool | null = null
+
+// Функция для установки новой строки подключения
+export function setConnectionString(newConnectionString: string) {
+  connectionString = newConnectionString
+  console.log("Установлена новая строка подключения")
+  return true
+}
+
+// Функция для получения текущей строки подключения (без пароля для безопасности)
+export function getConnectionStringInfo() {
+  try {
+    // Маскируем пароль в строке подключения для безопасности
+    const maskedConnectionString = connectionString.replace(/:[^@]+@/, ":******@")
+    return { connectionString: maskedConnectionString }
+  } catch (error) {
+    console.error("Ошибка при получении информации о строке подключения:", error)
+    return { connectionString: "Ошибка при получении информации" }
+  }
+}
 
 try {
   pool = new Pool({

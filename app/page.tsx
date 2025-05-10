@@ -143,6 +143,8 @@ export default function Home() {
     deleteFolder,
     toggleFolderOpen,
     switchToLocalStorage,
+    lastError,
+    lastErrorTime,
   } = useFileSystem()
 
   // Добавляем обработчик для кнопки переключения режима хранения
@@ -1142,6 +1144,7 @@ export default function Home() {
             onUseLocalStorage={() => {
               switchToLocalStorage()
               setShowDbStatus(false)
+              setShowDbInitializer(false)
             }}
           />
           <Button
@@ -1293,6 +1296,14 @@ export default function Home() {
           >
             {useLocalStorageMode ? <Save className="h-3 w-3 mr-1" /> : <Database className="h-3 w-3 mr-1" />}
             {useLocalStorageMode ? "Локальное хранилище" : "База данных"}
+          </button>
+
+          <button
+            className="ml-2 px-2 py-1 flex items-center text-xs bg-[#4b4b4b] hover:bg-[#5a5a5a] rounded"
+            onClick={() => setShowDbInitializer(true)}
+          >
+            <Settings className="h-3 w-3 mr-1" />
+            Настройки БД
           </button>
         </div>
 
@@ -1664,7 +1675,7 @@ export default function Home() {
       <ConnectionStatus
         status={dbConnectionStatus}
         lastError={fileSystemError}
-        lastErrorTime={null}
+        lastErrorTime={lastErrorTime}
         onRetryConnection={loadFileSystem}
         onSwitchToLocalStorage={switchToLocalStorage}
       />

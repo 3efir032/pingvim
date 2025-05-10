@@ -1,8 +1,37 @@
-import { NextResponse } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
 import { initDatabase, ensureRootFolder } from "@/lib/db-init"
-import { testConnection, reinitializePool } from "@/lib/db"
+import { testConnection, reinitializePool, setConnectionString } from "@/lib/db"
 
 export async function GET() {
+  return handleInitDb()
+}
+
+// Добавляем POST метод для приема пользовательской строки подключения
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json()
+    const customConnectionString = body.connectionString
+
+    // Если передана пользовательская строка подключения, устанавливаем её
+    if (customConnectionString) {
+      setConnectionString(customConnectionString)
+    }
+
+    return handleInitDb()
+  } catch (error) {
+    console.error("Ошибка при обработке запроса:", error)
+    return NextResponse.json(
+      {
+        success: false,
+        error: error instanceof Error ? error.message : "Внутренняя ошибка сервера",
+      },
+      { status: 500, headers: { "Content-Type": "application/json" } },
+    )
+  }
+}
+
+// Общая функция для обработки инициализации базы данных
+async function handleInitDb() {
   try {
     console.log("Начало инициализации базы данных")
 
