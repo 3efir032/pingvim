@@ -150,7 +150,7 @@ export function useSupabaseSync(
             if (deleteError) throw deleteError
           }
 
-          // Загружаем папки
+          // Загружаем пап��и
           const { error: foldersError } = await supabase.from("folders").insert(dataToUpload.folders)
           if (foldersError) throw foldersError
 

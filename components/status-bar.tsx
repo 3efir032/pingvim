@@ -19,7 +19,7 @@ export default function StatusBar({ syncState, onSync, isLoggedIn }: StatusBarPr
       <div className="flex items-center space-x-4">
         {isLoggedIn && syncState && onSync && <SyncStatus syncState={syncState} onSync={onSync} />}
         <span>Demo</span>
-        <span>Version: v2.29</span>
+        <span>Version: v3.04</span>
       </div>
     </div>
   )

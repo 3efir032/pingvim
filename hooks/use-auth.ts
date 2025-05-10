@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { getSupabase } from "@/lib/supabase"
-import type { User } from "@supabase/supabase-js"
+import type { User, AuthError } from "@supabase/supabase-js"
 
 export function useAuth() {
   const [user, setUser] = useState<User | null>(null)
@@ -38,6 +38,23 @@ export function useAuth() {
     }
   }, [supabase])
 
+  // Функция для получения понятного сообщения об ошибке
+  const getErrorMessage = (error: AuthError): string => {
+    // Обрабатываем известные коды ошибок
+    switch (error.message) {
+      case "Invalid login credentials":
+        return "Неверный email или пароль. Если вы только что зарегистрировались, проверьте почту для подтверждения аккаунта."
+      case "Email not confirmed":
+        return "Email не подтвержден. Пожалуйста, проверьте вашу почту и перейдите по ссылке подтверждения."
+      case "User already registered":
+        return "Пользователь с таким email уже зарегистрирован. Попробуйте войти или восстановить пароль."
+      case "Password should be at least 6 characters":
+        return "Пароль должен содержать не менее 6 символов."
+      default:
+        return error.message || "Произошла ошибка при авторизации."
+    }
+  }
+
   const signIn = async (email: string, password: string) => {
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
@@ -45,10 +62,13 @@ export function useAuth() {
         password,
       })
 
-      if (error) throw error
+      if (error) {
+        return { data: null, error: getErrorMessage(error) }
+      }
+
       return { data, error: null }
     } catch (error: any) {
-      return { data: null, error: error.message }
+      return { data: null, error: error.message || "Произошла ошибка при входе" }
     }
   }
 
@@ -57,12 +77,28 @@ export function useAuth() {
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
+        options: {
+          emailRedirectTo: window.location.origin,
+        },
       })
 
-      if (error) throw error
+      if (error) {
+        return { data: null, error: getErrorMessage(error) }
+      }
+
+      // Проверяем, требуется ли подтверждение email
+      if (data?.user && !data.user.confirmed_at) {
+        return {
+          data,
+          error: null,
+          message:
+            "На ваш email отправлена ссылка для подтверждения. Пожалуйста, проверьте почту и подтвердите регистрацию.",
+        }
+      }
+
       return { data, error: null }
     } catch (error: any) {
-      return { data: null, error: error.message }
+      return { data: null, error: error.message || "Произошла ошибка при регистрации" }
     }
   }
 
@@ -75,10 +111,29 @@ export function useAuth() {
         },
       })
 
-      if (error) throw error
+      if (error) {
+        return { data: null, error: getErrorMessage(error) }
+      }
+
       return { data, error: null }
     } catch (error: any) {
-      return { data: null, error: error.message }
+      return { data: null, error: error.message || "Произошла ошибка при входе через GitHub" }
+    }
+  }
+
+  const resetPassword = async (email: string) => {
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      })
+
+      if (error) {
+        return { error: getErrorMessage(error) }
+      }
+
+      return { error: null }
+    } catch (error: any) {
+      return { error: error.message || "Произошла ошибка при отправке ссылки для сброса пароля" }
     }
   }
 
@@ -97,6 +152,7 @@ export function useAuth() {
     signIn,
     signUp,
     signInWithGitHub,
+    resetPassword,
     signOut,
   }
 }
