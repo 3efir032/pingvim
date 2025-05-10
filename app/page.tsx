@@ -1038,7 +1038,6 @@ export default function Home() {
             <button className="p-1 hover:bg-gray-600 rounded" onClick={exportData} title="Экспорт данных">
               <Download className="h-3 w-3" />
             </button>
-            // Add these buttons to the file explorer header, in the div with the Upload/Download buttons
             <button
               className={`p-1 hover:bg-gray-600 rounded ${dbStatus !== "connected" ? "opacity-50" : ""}`}
               onClick={loadFromDatabase}
@@ -1221,7 +1220,6 @@ export default function Home() {
 
         <div className="ml-auto flex items-center">
           <input type="file" ref={fileInputRef} className="hidden" accept=".json" onChange={importData} />
-          // Add this to the toolbar section, right before the User dropdown
           <button
             className={`p-2 hover:bg-gray-600 ${dbStatus === "connected" ? "text-green-500" : ""}`}
             onClick={() => setDbConnectionOpen(true)}
@@ -1428,6 +1426,7 @@ export default function Home() {
         </div>
       )}
       {/* Change Password Dialog */}
+      {/* Change Password Dialog */}
       <Dialog open={changePasswordOpen} onOpenChange={setChangePasswordOpen}>
         <DialogContent className="bg-[#1B1C1F] border-gray-700 text-gray-300 p-0">
           <DialogHeader className="p-4 border-b border-gray-700">
@@ -1592,7 +1591,6 @@ export default function Home() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      // Add this at the end of the component, right before the closing return statement
       <DbConnectionDialog open={dbConnectionOpen} onOpenChange={setDbConnectionOpen} />
     </div>
   )
