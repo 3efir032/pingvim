@@ -5,6 +5,7 @@ import { useState, useEffect, useRef, useCallback, useLayoutEffect } from "react
 import {
   Settings,
   Search,
+  User,
   SplitSquareVertical,
   File,
   Folder,
@@ -18,8 +19,6 @@ import {
   X,
   Download,
   Upload,
-  Cloud,
-  LogOut,
 } from "lucide-react"
 import { useLocalStorage } from "@/hooks/use-local-storage"
 import Editor from "@/components/editor"
@@ -29,12 +28,87 @@ import type { FileType, FolderType } from "@/types/file-system"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { useAuth } from "@/hooks/use-auth"
-import { useSupabaseSync } from "@/hooks/use-supabase-sync"
-import AuthForm from "@/components/auth-form"
-import UserMenu from "@/components/user-menu"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 
 export default function Home() {
+  // Состояние авторизации
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [authChecked, setAuthChecked] = useState(false)
+
+  // Состояние для диалога смены пароля
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false)
+  const [newPassword, setNewPassword] = useState("")
+  const [confirmPassword, setConfirmPassword] = useState("")
+  const [passwordError, setPasswordError] = useState("")
+  const [oldPassword, setOldPassword] = useState("")
+  const [disablePassword, setDisablePassword] = useState(false)
+
+  // Проверяем авторизацию при загрузке страницы
+  useEffect(() => {
+    const auth = localStorage.getItem("pycharm-auth")
+    setIsAuthenticated(auth === "true")
+    setAuthChecked(true)
+  }, [])
+
+  // Добавляем обработчик нажатия клавиши Esc для блокировки редактора
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && isAuthenticated) {
+        // Блокируем редактор при нажатии Esc
+        localStorage.removeItem("pycharm-auth")
+        setIsAuthenticated(false)
+      }
+    }
+
+    document.addEventListener("keydown", handleKeyDown)
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown)
+    }
+  }, [isAuthenticated])
+
+  // Функция для смены пароля
+  const handleChangePassword = () => {
+    // Получаем текущий пароль из localStorage или используем дефолтный
+    const currentPassword = localStorage.getItem("pycharm-password") || "111"
+
+    // Проверяем старый пароль
+    if (oldPassword !== currentPassword) {
+      setPasswordError("Неверный текущий пароль")
+      return
+    }
+
+    // Если выбрано отключение пароля
+    if (disablePassword) {
+      localStorage.removeItem("pycharm-password")
+      setPasswordError("")
+      setOldPassword("")
+      setNewPassword("")
+      setConfirmPassword("")
+      setDisablePassword(false)
+      setChangePasswordOpen(false)
+      return
+    }
+
+    if (!newPassword) {
+      setPasswordError("Пароль не может быть пустым")
+      return
+    }
+
+    if (newPassword !== confirmPassword) {
+      setPasswordError("Пароли не совпадают")
+      return
+    }
+
+    // Сохраняем новый пароль
+    localStorage.setItem("pycharm-password", newPassword)
+    setPasswordError("")
+    setOldPassword("")
+    setNewPassword("")
+    setConfirmPassword("")
+    setDisablePassword(false)
+    setChangePasswordOpen(false)
+  }
+
   // Track open files for left pane
   const [leftPaneFiles, setLeftPaneFiles] = useLocalStorage<string[]>("pycharm-left-pane-files", [])
   // Track open files for right pane
@@ -106,91 +180,6 @@ export default function Home() {
   // После других useRef
   const toolbarRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
-
-  // Состояние авторизации
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
-  const [authChecked, setAuthChecked] = useState(false)
-
-  // Состояние для отображения формы авторизации Supabase
-  const [showSupabaseAuth, setShowSupabaseAuth] = useState(false)
-
-  // Состояние для диалога смены пароля
-  const [changePasswordOpen, setChangePasswordOpen] = useState(false)
-  const [newPassword, setNewPassword] = useState("")
-  const [confirmPassword, setConfirmPassword] = useState("")
-  const [passwordError, setPasswordError] = useState("")
-  const [oldPassword, setOldPassword] = useState("")
-  const [disablePassword, setDisablePassword] = useState(false)
-
-  // Хуки для работы с Supabase
-  const { user, loading: authLoading, signOut } = useAuth()
-  const { syncState, syncWithSupabase } = useSupabaseSync(fileSystem, setFileSystem)
-
-  // Проверяем авторизацию при загрузке страницы
-  useEffect(() => {
-    const auth = localStorage.getItem("pycharm-auth")
-    setIsAuthenticated(auth === "true")
-    setAuthChecked(true)
-  }, [])
-
-  // Добавляем обработчик нажатия клавиши Esc для блокировки редактора
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && isAuthenticated) {
-        // Блокируем редактор при нажатии Esc
-        localStorage.removeItem("pycharm-auth")
-        setIsAuthenticated(false)
-      }
-    }
-
-    document.addEventListener("keydown", handleKeyDown)
-    return () => {
-      document.removeEventListener("keydown", handleKeyDown)
-    }
-  }, [isAuthenticated])
-
-  // Функция для смены пароля
-  const handleChangePassword = () => {
-    // Получаем текущий пароль из localStorage или используем дефолтный
-    const currentPassword = localStorage.getItem("pycharm-password") || "111"
-
-    // Проверяем старый пароль
-    if (oldPassword !== currentPassword) {
-      setPasswordError("Неверный текущий пароль")
-      return
-    }
-
-    // Если выбрано отключение пароля
-    if (disablePassword) {
-      localStorage.removeItem("pycharm-password")
-      setPasswordError("")
-      setOldPassword("")
-      setNewPassword("")
-      setConfirmPassword("")
-      setDisablePassword(false)
-      setChangePasswordOpen(false)
-      return
-    }
-
-    if (!newPassword) {
-      setPasswordError("Пароль не может быть пустым")
-      return
-    }
-
-    if (newPassword !== confirmPassword) {
-      setPasswordError("Пароли не совпадают")
-      return
-    }
-
-    // Сохраняем новый пароль
-    localStorage.setItem("pycharm-password", newPassword)
-    setPasswordError("")
-    setOldPassword("")
-    setNewPassword("")
-    setConfirmPassword("")
-    setDisablePassword(false)
-    setChangePasswordOpen(false)
-  }
 
   // Enable split view if there are files in the right pane
   useEffect(() => {
@@ -1159,31 +1148,31 @@ export default function Home() {
         </div>
 
         <div className="ml-auto flex items-center">
-          {/* Кнопка для синхронизации с Supabase */}
-          {user ? (
-            <div className="flex items-center">
-              <button className="p-2 hover:bg-gray-600" onClick={() => signOut()} title="Выйти из аккаунта">
-                <LogOut className="h-4 w-4" />
-              </button>
-            </div>
-          ) : (
-            <button
-              className="p-2 hover:bg-gray-600"
-              onClick={() => setShowSupabaseAuth(true)}
-              title="Синхронизация с облаком"
-            >
-              <Cloud className="h-4 w-4" />
-            </button>
-          )}
           <input type="file" ref={fileInputRef} className="hidden" accept=".json" onChange={importData} />
-          {/* Заменяем существующий DropdownMenu на UserMenu */}
-          <UserMenu
-            onChangePassword={() => setChangePasswordOpen(true)}
-            onLockEditor={() => {
-              localStorage.removeItem("pycharm-auth")
-              setIsAuthenticated(false)
-            }}
-          />
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="p-2 hover:bg-gray-600" title="Меню пользователя">
+                <User className="h-4 w-4" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="bg-[#1B1C1F] border-gray-700 text-gray-300">
+              <DropdownMenuItem
+                onClick={() => setChangePasswordOpen(true)}
+                className="hover:bg-[#2E436E] cursor-pointer focus:bg-[#2E436E] focus:text-gray-300"
+              >
+                Сменить пароль
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => {
+                  localStorage.removeItem("pycharm-auth")
+                  setIsAuthenticated(false)
+                }}
+                className="hover:bg-[#2E436E] cursor-pointer focus:bg-[#2E436E] focus:text-gray-300"
+              >
+                Заблокировать редактор
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <button
             className="p-2 hover:bg-gray-600"
             onClick={() => setSettingsOpen(!settingsOpen)}
@@ -1324,7 +1313,7 @@ export default function Home() {
       </div>
 
       {/* Status bar */}
-      <StatusBar syncState={syncState} onSync={() => syncWithSupabase(true)} isLoggedIn={!!user} />
+      <StatusBar />
 
       {/* Settings Menu */}
       {settingsOpen && (
@@ -1363,17 +1352,6 @@ export default function Home() {
       )}
 
       {/* Change Password Dialog */}
-      {/* Диалог для авторизации Supabase */}
-      <Dialog open={showSupabaseAuth} onOpenChange={setShowSupabaseAuth}>
-        <DialogContent className="bg-[#1B1C1F] border-gray-700 text-gray-300 p-0">
-          <DialogHeader className="p-4 border-b border-gray-700">
-            <DialogTitle>Синхронизация с облаком</DialogTitle>
-          </DialogHeader>
-          <div className="p-4">
-            <AuthForm onSuccess={() => setShowSupabaseAuth(false)} />
-          </div>
-        </DialogContent>
-      </Dialog>
       <Dialog open={changePasswordOpen} onOpenChange={setChangePasswordOpen}>
         <DialogContent className="bg-[#1B1C1F] border-gray-700 text-gray-300 p-0">
           <DialogHeader className="p-4 border-b border-gray-700">
