@@ -100,9 +100,10 @@ export const fileSystemAPI = {
     return { folders, files }
   },
 
-  // Check database connection
+  // Check database connection and initialize if needed
   checkConnection: async (): Promise<{ connected: boolean; message: string }> => {
     try {
+      // Этот запрос также инициализирует базу данных
       await fetchAPI("/health")
       return { connected: true, message: "Connected to database" }
     } catch (error) {

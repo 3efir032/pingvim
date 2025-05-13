@@ -183,6 +183,22 @@ export default function Home() {
   const toolbarRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  // Добавьте этот useEffect для инициализации базы данных при загрузке страницы
+  useEffect(() => {
+    const initDb = async () => {
+      if (isAuthenticated) {
+        try {
+          // Вызываем API для проверки здоровья, который также инициализирует базу данных
+          await fileSystemAPI.checkConnection()
+        } catch (error) {
+          console.error("Failed to initialize database:", error)
+        }
+      }
+    }
+
+    initDb()
+  }, [isAuthenticated])
+
   // Enable split view if there are files in the right pane
   useEffect(() => {
     if (rightPaneFiles.length > 0 && !splitView) {
