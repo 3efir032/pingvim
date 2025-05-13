@@ -19,6 +19,7 @@ import {
   X,
   Download,
   Upload,
+  Database,
 } from "lucide-react"
 import { useLocalStorage } from "@/hooks/use-local-storage"
 import Editor from "@/components/editor"
@@ -29,7 +30,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { fileSystemAPI, foldersAPI, filesAPI } from "@/lib/api-service"
+import { storageManager } from "@/services/storage-manager"
+import { dbService } from "@/services/database-service"
+import DatabaseConfig from "@/components/database-config"
 
 export default function Home() {
   // Состояние авторизации
@@ -43,6 +46,11 @@ export default function Home() {
   const [passwordError, setPasswordError] = useState("")
   const [oldPassword, setOldPassword] = useState("")
   const [disablePassword, setDisablePassword] = useState(false)
+
+  // Database config dialog
+  const [dbConfigOpen, setDbConfigOpen] = useState(false)
+  const [storageType, setStorageType] = useState<"local" | "database">("local")
+  const [isLoading, setIsLoading] = useState(false)
 
   // Проверяем авторизацию при загрузке страницы
   useEffect(() => {
@@ -174,30 +182,13 @@ export default function Home() {
     folders: FolderType[]
     files: FileType[]
   }>({
-    folders: [],
+    folders: [{ id: "1", name: "Notes", isOpen: true, parentId: null }],
     files: [],
   })
-  const [isLoading, setIsLoading] = useState(true)
 
   // После других useRef
   const toolbarRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
-
-  // Добавьте этот useEffect для инициализации базы данных при загрузке страницы
-  useEffect(() => {
-    const initDb = async () => {
-      if (isAuthenticated) {
-        try {
-          // Вызываем API для проверки здоровья, который также инициализирует базу данных
-          await fileSystemAPI.checkConnection()
-        } catch (error) {
-          console.error("Failed to initialize database:", error)
-        }
-      }
-    }
-
-    initDb()
-  }, [isAuthenticated])
 
   // Enable split view if there are files in the right pane
   useEffect(() => {
@@ -232,6 +223,24 @@ export default function Home() {
     setRightActiveFile,
     setSplitView,
   ])
+
+  // Load data from the selected storage
+  useEffect(() => {
+    const loadData = async () => {
+      setIsLoading(true)
+      try {
+        const data = await storageManager.loadData()
+        setFileSystem(data)
+        setStorageType(storageManager.getStorageType())
+      } catch (error) {
+        console.error("Failed to load data:", error)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    loadData()
+  }, [])
 
   // Найдем и заменим функцию initResizer и соответствующий useLayoutEffect
 
@@ -489,28 +498,15 @@ export default function Home() {
     }
   }
 
-  const handleFileContentChange = async (fileId: string, newContent: string) => {
-    try {
-      const file = fileSystem.files.find((f) => f.id === fileId)
-      if (!file) return
-
-      // Debounce the API call to avoid too many requests
-      clearTimeout((window as any).saveTimeout)
-      ;(window as any).saveTimeout = setTimeout(async () => {
-        await filesAPI.update({
-          ...file,
-          content: newContent,
-        })
-      }, 1000)
-
-      // Update local state immediately for responsiveness
-      setFileSystem((prev) => ({
+  const handleFileContentChange = (fileId: string, newContent: string) => {
+    setFileSystem((prev) => {
+      const newState = {
         ...prev,
         files: prev.files.map((file) => (file.id === fileId ? { ...file, content: newContent } : file)),
-      }))
-    } catch (error) {
-      console.error("Error updating file content:", error)
-    }
+      }
+      storageManager.saveData(newState).catch((err) => console.error("Failed to save file content:", err))
+      return newState
+    })
   }
 
   // File operations
@@ -564,36 +560,41 @@ export default function Home() {
       return
     }
 
-    try {
-      if (newItemType === "file") {
-        const newFile = await filesAPI.create({
-          name: newItemName,
-          content: "",
-          parentId: newItemParentId,
-        })
-
-        setFileSystem((prev) => ({
-          ...prev,
-          files: [...prev.files, newFile],
-        }))
-      } else {
-        const newFolder = await foldersAPI.create({
-          name: newItemName,
-          isOpen: false,
-          parentId: newItemParentId,
-        })
-
-        setFileSystem((prev) => ({
-          ...prev,
-          folders: [...prev.folders, newFolder],
-        }))
+    if (newItemType === "file") {
+      const newFile = {
+        id: storageType === "local" ? Date.now().toString() : `temp_${Date.now()}`,
+        name: newItemName,
+        content: "",
+        parentId: newItemParentId,
       }
 
-      setNewItemDialogOpen(false)
-    } catch (error) {
-      console.error(`Error creating ${newItemType}:`, error)
-      alert(`Failed to create ${newItemType}. Please try again.`)
+      setFileSystem((prev) => {
+        const newState = {
+          ...prev,
+          files: [...prev.files, newFile],
+        }
+        storageManager.saveData(newState).catch((err) => console.error("Failed to save new file:", err))
+        return newState
+      })
+    } else {
+      const newFolder = {
+        id: storageType === "local" ? Date.now().toString() : `temp_${Date.now()}`,
+        name: newItemName,
+        isOpen: false,
+        parentId: newItemParentId,
+      }
+
+      setFileSystem((prev) => {
+        const newState = {
+          ...prev,
+          folders: [...prev.folders, newFolder],
+        }
+        storageManager.saveData(newState).catch((err) => console.error("Failed to save new folder:", err))
+        return newState
+      })
     }
+
+    setNewItemDialogOpen(false)
   }
 
   const renameItem = async () => {
@@ -602,41 +603,30 @@ export default function Home() {
       return
     }
 
-    try {
-      if (itemToRename.type === "file") {
-        const fileToUpdate = fileSystem.files.find((file) => file.id === itemToRename.id)
-        if (!fileToUpdate) return
-
-        const updatedFile = await filesAPI.update({
-          ...fileToUpdate,
-          name: newName,
-        })
-
-        setFileSystem((prev) => ({
+    if (itemToRename.type === "file") {
+      setFileSystem((prev) => {
+        const newState = {
           ...prev,
-          files: prev.files.map((file) => (file.id === itemToRename.id ? updatedFile : file)),
-        }))
-      } else {
-        const folderToUpdate = fileSystem.folders.find((folder) => folder.id === itemToRename.id)
-        if (!folderToUpdate) return
-
-        const updatedFolder = await foldersAPI.update({
-          ...folderToUpdate,
-          name: newName,
-        })
-
-        setFileSystem((prev) => ({
+          files: prev.files.map((file) => (file.id === itemToRename.id ? { ...file, name: newName } : file)),
+        }
+        storageManager.saveData(newState).catch((err) => console.error("Failed to rename file:", err))
+        return newState
+      })
+    } else {
+      setFileSystem((prev) => {
+        const newState = {
           ...prev,
-          folders: prev.folders.map((folder) => (folder.id === itemToRename.id ? updatedFolder : folder)),
-        }))
-      }
-
-      setRenameDialogOpen(false)
-      setItemToRename(null)
-    } catch (error) {
-      console.error(`Error renaming ${itemToRename.type}:`, error)
-      alert(`Failed to rename ${itemToRename.type}. Please try again.`)
+          folders: prev.folders.map((folder) =>
+            folder.id === itemToRename.id ? { ...folder, name: newName } : folder,
+          ),
+        }
+        storageManager.saveData(newState).catch((err) => console.error("Failed to rename folder:", err))
+        return newState
+      })
     }
+
+    setRenameDialogOpen(false)
+    setItemToRename(null)
   }
 
   const deleteItem = async () => {
@@ -645,232 +635,174 @@ export default function Home() {
       return
     }
 
-    try {
-      if (itemToDelete.type === "file") {
-        // Close the file if it's open in either pane
-        if (leftPaneFiles.includes(itemToDelete.id)) {
-          handleCloseFile("left", itemToDelete.id)
-        }
-        if (rightPaneFiles.includes(itemToDelete.id)) {
-          handleCloseFile("right", itemToDelete.id)
-        }
-
-        await filesAPI.delete(itemToDelete.id)
-
-        setFileSystem((prev) => ({
-          ...prev,
-          files: prev.files.filter((file) => file.id !== itemToDelete.id),
-        }))
-      } else {
-        // Get all child folders and files to close them if they're open
-        const foldersToDelete = [itemToDelete.id]
-        const filesToDelete: string[] = []
-
-        // Find all subfolders
-        const checkFolders = [itemToDelete.id]
-        while (checkFolders.length > 0) {
-          const currentFolderId = checkFolders.shift()!
-          const childFolders = fileSystem.folders.filter((f) => f.parentId === currentFolderId)
-
-          childFolders.forEach((folder) => {
-            foldersToDelete.push(folder.id)
-            checkFolders.push(folder.id)
-          })
-
-          // Find all files in this folder
-          const childFiles = fileSystem.files.filter((f) => f.parentId === currentFolderId)
-          filesToDelete.push(...childFiles.map((f) => f.id))
-        }
-
-        // Close any open files that are being deleted
-        filesToDelete.forEach((fileId) => {
-          if (leftPaneFiles.includes(fileId)) {
-            handleCloseFile("left", fileId)
-          }
-          if (rightPaneFiles.includes(fileId)) {
-            handleCloseFile("right", fileId)
-          }
-        })
-
-        // Delete the folder (the API will handle cascading deletes)
-        await foldersAPI.delete(itemToDelete.id)
-
-        // Update the local state
-        setFileSystem((prev) => ({
-          folders: prev.folders.filter((folder) => !foldersToDelete.includes(folder.id)),
-          files: prev.files.filter((file) => !filesToDelete.includes(file.id)),
-        }))
+    if (itemToDelete.type === "file") {
+      // Close the file if it's open in either pane
+      if (leftPaneFiles.includes(itemToDelete.id)) {
+        handleCloseFile("left", itemToDelete.id)
+      }
+      if (rightPaneFiles.includes(itemToDelete.id)) {
+        handleCloseFile("right", itemToDelete.id)
       }
 
-      setDeleteConfirmOpen(false)
-      setItemToDelete(null)
-    } catch (error) {
-      console.error(`Error deleting ${itemToDelete.type}:`, error)
-      alert(`Failed to delete ${itemToDelete.type}. Please try again.`)
-    }
-  }
+      // Delete from database if using database storage
+      if (storageType === "database") {
+        await storageManager.deleteFile(itemToDelete.id)
+      }
 
-  const toggleFolderOpen = async (folderId: string) => {
-    try {
-      const folder = fileSystem.folders.find((f) => f.id === folderId)
-      if (!folder) return
+      setFileSystem((prev) => {
+        const newState = {
+          ...prev,
+          files: prev.files.filter((file) => file.id !== itemToDelete.id),
+        }
+        storageManager.saveData(newState).catch((err) => console.error("Failed to update after file deletion:", err))
+        return newState
+      })
+    } else {
+      // Delete folder and all its contents recursively
+      const foldersToDelete = [itemToDelete.id]
+      const filesToDelete: string[] = []
 
-      const updatedFolder = await foldersAPI.update({
-        ...folder,
-        isOpen: !folder.isOpen,
+      // Find all subfolders
+      const checkFolders = [itemToDelete.id]
+      while (checkFolders.length > 0) {
+        const currentFolderId = checkFolders.shift()!
+        const childFolders = fileSystem.folders.filter((f) => f.parentId === currentFolderId)
+
+        childFolders.forEach((folder) => {
+          foldersToDelete.push(folder.id)
+          checkFolders.push(folder.id)
+        })
+
+        // Find all files in this folder
+        const childFiles = fileSystem.files.filter((f) => f.parentId === currentFolderId)
+        filesToDelete.push(...childFiles.map((f) => f.id))
+      }
+
+      // Close any open files that are being deleted
+      filesToDelete.forEach((fileId) => {
+        if (leftPaneFiles.includes(fileId)) {
+          handleCloseFile("left", fileId)
+        }
+        if (rightPaneFiles.includes(fileId)) {
+          handleCloseFile("right", fileId)
+        }
       })
 
-      setFileSystem((prev) => ({
-        ...prev,
-        folders: prev.folders.map((f) => (f.id === folderId ? updatedFolder : f)),
-      }))
-    } catch (error) {
-      console.error("Error toggling folder:", error)
+      // Delete from database if using database storage
+      if (storageType === "database") {
+        for (const folderId of foldersToDelete) {
+          await storageManager.deleteFolder(folderId)
+        }
+        for (const fileId of filesToDelete) {
+          await storageManager.deleteFile(fileId)
+        }
+      }
+
+      setFileSystem((prev) => {
+        const newState = {
+          folders: prev.folders.filter((folder) => !foldersToDelete.includes(folder.id)),
+          files: prev.files.filter((file) => !filesToDelete.includes(file.id)),
+        }
+        storageManager.saveData(newState).catch((err) => console.error("Failed to update after folder deletion:", err))
+        return newState
+      })
     }
+
+    setDeleteConfirmOpen(false)
+    setItemToDelete(null)
   }
 
-  const exportData = async () => {
-    try {
-      // Get the latest data from the API
-      const data = await fileSystemAPI.loadFileSystem()
+  const toggleFolderOpen = (folderId: string) => {
+    setFileSystem((prev) => {
+      const newState = {
+        ...prev,
+        folders: prev.folders.map((folder) =>
+          folder.id === folderId ? { ...folder, isOpen: !folder.isOpen } : folder,
+        ),
+      }
+      storageManager.saveData(newState).catch((err) => console.error("Failed to update folder state:", err))
+      return newState
+    })
+  }
 
-      // Create an object with the data and metadata
+  const exportData = () => {
+    try {
+      // Создаем объект с текущими данными и метаданными
       const exportData = {
         version: "1.0",
         timestamp: new Date().toISOString(),
-        data,
+        data: fileSystem,
       }
 
-      // Convert to JSON and download
+      // Преобразуем данные в JSON-строку
       const jsonString = JSON.stringify(exportData, null, 2)
+
+      // Создаем Blob с данными
       const blob = new Blob([jsonString], { type: "application/json" })
+
+      // Создаем URL для скачивания
       const url = URL.createObjectURL(blob)
+
+      // Создаем временную ссылку для скачивания
       const link = document.createElement("a")
       link.href = url
       link.download = `pingvim-data-${new Date().toISOString().slice(0, 10)}.json`
+
+      // Добавляем ссылку в DOM, кликаем по ней и удаляем
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
+
+      // Освобождаем URL
       URL.revokeObjectURL(url)
     } catch (error) {
-      console.error("Error exporting data:", error)
-      alert("An error occurred while exporting data")
+      console.error("Ошибка при экспорте данных:", error)
+      alert("Произошла ошибка при экспорте данных")
     }
   }
 
-  const importData = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const importData = (event: React.ChangeEvent<HTMLInputElement>) => {
     try {
       const file = event.target.files?.[0]
       if (!file) return
 
       const reader = new FileReader()
 
-      reader.onload = async (e) => {
+      reader.onload = (e) => {
         try {
           const content = e.target?.result as string
           const importedData = JSON.parse(content)
 
+          // Проверяем структуру данных
           if (importedData.data && Array.isArray(importedData.data.folders) && Array.isArray(importedData.data.files)) {
-            // First, clear existing data (except the root folder)
-            const existingFolders = fileSystem.folders.filter((f) => f.id !== "1")
-            const existingFiles = fileSystem.files
+            // Обновляем состояние fileSystem
+            setFileSystem(importedData.data)
 
-            // Delete all existing files
-            for (const file of existingFiles) {
-              await filesAPI.delete(file.id)
-            }
-
-            // Delete all existing folders except root
-            for (const folder of existingFolders) {
-              await foldersAPI.delete(folder.id)
-            }
-
-            // Import folders first (starting with those that have parent_id = 1 or null)
-            const rootFolders = importedData.data.folders.filter(
-              (f: FolderType) => f.id === "1" || f.parentId === "1" || f.parentId === null,
-            )
-
-            // Then import other folders
-            const otherFolders = importedData.data.folders.filter(
-              (f: FolderType) => f.id !== "1" && f.parentId !== "1" && f.parentId !== null,
-            )
-
-            // Import root folders
-            for (const folder of rootFolders) {
-              if (folder.id !== "1") {
-                // Skip the root folder as it already exists
-                await foldersAPI.create({
-                  name: folder.name,
-                  isOpen: folder.isOpen,
-                  parentId: folder.parentId,
-                })
-              }
-            }
-
-            // Import other folders
-            for (const folder of otherFolders) {
-              await foldersAPI.create({
-                name: folder.name,
-                isOpen: folder.isOpen,
-                parentId: folder.parentId,
-              })
-            }
-
-            // Import files
-            for (const file of importedData.data.files) {
-              await filesAPI.create({
-                name: file.name,
-                content: file.content,
-                parentId: file.parentId,
-              })
-            }
-
-            // Reload the file system
-            const updatedData = await fileSystemAPI.loadFileSystem()
-            setFileSystem(updatedData)
-
-            // Reset open files
+            // Сбрасываем открытые файлы, так как их ID могут не совпадать
             setLeftPaneFiles([])
             setRightPaneFiles([])
             setLeftActiveFile(null)
             setRightActiveFile(null)
 
-            alert("Data imported successfully")
+            alert("Данные успешно импортированы")
           } else {
-            throw new Error("Invalid data format")
+            throw new Error("Неверный формат данных")
           }
         } catch (parseError) {
-          console.error("Error parsing import file:", parseError)
-          alert("Failed to parse the import file. Please ensure it's a valid PingVim export.")
+          console.error("Ошибка при парсинге файла:", parseError)
+          alert("Не удалось прочитать файл. Убедитесь, что это корректный JSON-файл с данными PingVim")
         }
       }
 
       reader.readAsText(file)
+
+      // Сбрасываем значение input, чтобы можно было загрузить тот же файл повторно
       event.target.value = ""
     } catch (error) {
-      console.error("Error importing data:", error)
-      alert("An error occurred while importing data")
+      console.error("Ошибка при импорте данных:", error)
+      alert("Произошла ошибка при импорте данных")
     }
   }
-
-  // Load file system data from the API
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        setIsLoading(true)
-        const data = await fileSystemAPI.loadFileSystem()
-        setFileSystem(data)
-      } catch (error) {
-        console.error("Error loading file system:", error)
-      } finally {
-        setIsLoading(false)
-      }
-    }
-
-    if (isAuthenticated) {
-      loadData()
-    }
-  }, [isAuthenticated])
 
   // Toggle settings menu
   const toggleSettingsMenu = () => {
@@ -1219,18 +1151,6 @@ export default function Home() {
     return <AuthPage onAuth={(success) => setIsAuthenticated(success)} defaultPassword={savedPassword} />
   }
 
-  // If data is loading, show a loading indicator
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-screen bg-[#1B1C1F] text-gray-300">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#2E436E] mx-auto mb-4"></div>
-          <p>Loading your files...</p>
-        </div>
-      </div>
-    )
-  }
-
   return (
     <div className="flex flex-col h-screen bg-[#2b2b2b] text-gray-300 overflow-hidden">
       {/* Top toolbar */}
@@ -1307,6 +1227,13 @@ export default function Home() {
 
         <div className="ml-auto flex items-center">
           <input type="file" ref={fileInputRef} className="hidden" accept=".json" onChange={importData} />
+          <button
+            className={`p-2 hover:bg-gray-600 ${storageType === "database" && dbService.isEnabled() ? "text-green-400" : ""}`}
+            onClick={() => setDbConfigOpen(true)}
+            title={storageType === "database" && dbService.isEnabled() ? "Database Connected" : "Configure Database"}
+          >
+            <Database className="h-4 w-4" />
+          </button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button className="p-2 hover:bg-gray-600" title="Меню пользователя">
@@ -1675,6 +1602,16 @@ export default function Home() {
               Delete
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Database Configuration Dialog */}
+      <Dialog open={dbConfigOpen} onOpenChange={setDbConfigOpen}>
+        <DialogContent className="bg-[#1B1C1F] border-gray-700 text-gray-300 p-0 max-w-md">
+          <DialogHeader className="p-4 border-b border-gray-700">
+            <DialogTitle>Database Configuration</DialogTitle>
+          </DialogHeader>
+          <DatabaseConfig onClose={() => setDbConfigOpen(false)} />
         </DialogContent>
       </Dialog>
     </div>
