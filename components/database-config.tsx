@@ -27,8 +27,12 @@ export default function DatabaseConfig({ onClose }: DatabaseConfigProps) {
   const [isTesting, setIsTesting] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [isMigrating, setIsMigrating] = useState(false)
+  const [isClient, setIsClient] = useState(false)
 
   useEffect(() => {
+    // Устанавливаем флаг, что мы на клиенте
+    setIsClient(true)
+
     // Load existing config if available
     const savedConfig = dbService.getConfig()
     if (savedConfig) {
@@ -43,6 +47,8 @@ export default function DatabaseConfig({ onClose }: DatabaseConfigProps) {
   }
 
   const handleTestConnection = async () => {
+    if (!isClient) return
+
     setIsTesting(true)
     setTestResult(null)
 
@@ -60,6 +66,8 @@ export default function DatabaseConfig({ onClose }: DatabaseConfigProps) {
   }
 
   const handleSave = () => {
+    if (!isClient) return
+
     setIsSaving(true)
 
     try {
@@ -82,6 +90,8 @@ export default function DatabaseConfig({ onClose }: DatabaseConfigProps) {
   }
 
   const handleMigrateToDatabase = async () => {
+    if (!isClient) return
+
     if (!config.enabled) {
       alert("Please enable database connection first")
       return
@@ -105,6 +115,8 @@ export default function DatabaseConfig({ onClose }: DatabaseConfigProps) {
   }
 
   const handleMigrateToLocal = async () => {
+    if (!isClient) return
+
     setIsMigrating(true)
 
     try {
@@ -120,6 +132,15 @@ export default function DatabaseConfig({ onClose }: DatabaseConfigProps) {
     } finally {
       setIsMigrating(false)
     }
+  }
+
+  // Если мы не на клиенте, показываем заглушку
+  if (!isClient) {
+    return (
+      <div className="space-y-4 p-4 flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+      </div>
+    )
   }
 
   return (
