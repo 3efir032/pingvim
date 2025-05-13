@@ -4,21 +4,21 @@ import { useState, useEffect } from "react"
 
 export function useLocalStorage<T>(key: string, initialValue: T): [T, (value: T | ((val: T) => T)) => void] {
   // State to store our value
-  const [storedValue, setStoredValue] = useState<T>(initialValue)
+  const [storedValue, setStoredValue] = useState<T>(() => {
+    if (typeof window === "undefined") {
+      return initialValue
+    }
 
-  // Initialize from localStorage when component mounts (client-side only)
-  useEffect(() => {
     try {
       // Get from local storage by key
       const item = window.localStorage.getItem(key)
       // Parse stored json or if none return initialValue
-      const value = item ? JSON.parse(item) : initialValue
-      setStoredValue(value)
+      return item ? JSON.parse(item) : initialValue
     } catch (error) {
       console.log(error)
-      setStoredValue(initialValue)
+      return initialValue
     }
-  }, [key, initialValue])
+  })
 
   // Return a wrapped version of useState's setter function that
   // persists the new value to localStorage.
@@ -37,6 +37,13 @@ export function useLocalStorage<T>(key: string, initialValue: T): [T, (value: T 
       console.log(error)
     }
   }
+
+  // Update local storage if the key changes
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(key, JSON.stringify(storedValue))
+    }
+  }, [key, storedValue])
 
   return [storedValue, setValue]
 }

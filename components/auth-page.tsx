@@ -1,6 +1,7 @@
 "use client"
 
 import type React from "react"
+
 import { useState, useEffect } from "react"
 import { Input } from "@/components/ui/input"
 import { Lock } from "lucide-react"
@@ -16,17 +17,11 @@ export default function AuthPage({ onAuth, defaultPassword }: AuthPageProps) {
   const [error, setError] = useState(false)
   // Add a new state variable to track password field visibility
   const [passwordVisible, setPasswordVisible] = useState(false)
-  const [isClient, setIsClient] = useState(false)
-
-  // Устанавливаем флаг, что мы на клиенте
-  useEffect(() => {
-    setIsClient(true)
-  }, [])
 
   // Обновляем обработчик нажатия клавиш, чтобы символы попадали в поле ввода пароля
-  useEffect(() => {
-    if (!isClient) return
 
+  // Заменяем существующий useEffect на следующий:
+  useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Показываем поле пароля при нажатии любой клавиши
       if (!passwordVisible) {
@@ -52,9 +47,7 @@ export default function AuthPage({ onAuth, defaultPassword }: AuthPageProps) {
         if (password === defaultPassword) {
           setError(false)
           onAuth(true)
-          if (typeof window !== "undefined") {
-            localStorage.setItem("pycharm-auth", "true")
-          }
+          localStorage.setItem("pycharm-auth", "true")
         } else {
           setError(true)
         }
@@ -66,7 +59,7 @@ export default function AuthPage({ onAuth, defaultPassword }: AuthPageProps) {
     return () => {
       document.removeEventListener("keydown", handleKeyDown)
     }
-  }, [passwordVisible, password, defaultPassword, onAuth, isClient])
+  }, [passwordVisible, password, defaultPassword, onAuth])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -75,9 +68,7 @@ export default function AuthPage({ onAuth, defaultPassword }: AuthPageProps) {
       setError(false)
       onAuth(true)
       // Сохраняем состояние авторизации в localStorage
-      if (typeof window !== "undefined") {
-        localStorage.setItem("pycharm-auth", "true")
-      }
+      localStorage.setItem("pycharm-auth", "true")
     } else {
       setError(true)
     }
@@ -107,9 +98,7 @@ export default function AuthPage({ onAuth, defaultPassword }: AuthPageProps) {
                   if (password === defaultPassword) {
                     setError(false)
                     onAuth(true)
-                    if (typeof window !== "undefined") {
-                      localStorage.setItem("pycharm-auth", "true")
-                    }
+                    localStorage.setItem("pycharm-auth", "true")
                   } else {
                     setError(true)
                   }

@@ -2,29 +2,19 @@
 
 import type React from "react"
 import { useEffect, useRef, useState } from "react"
-import { Eye, Edit2 } from "lucide-react"
-import FilePreview from "./file-preview"
-import type { FileType } from "@/types/file-system"
 
 interface EditorProps {
   content: string
   onChange: (newContent: string) => void
   showLineNumbers?: boolean
   fontSize?: number
-  file?: FileType | null
 }
 
-export default function Editor({ content, onChange, showLineNumbers = false, fontSize = 13, file }: EditorProps) {
+export default function Editor({ content, onChange, showLineNumbers = false, fontSize = 13 }: EditorProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const editorRef = useRef<HTMLDivElement>(null)
   const cursorPositionRef = useRef<{ start: number; end: number } | null>(null)
   const [lineCount, setLineCount] = useState(1)
-  const [isPreviewMode, setIsPreviewMode] = useState(false)
-  const [isClient, setIsClient] = useState(false)
-
-  useEffect(() => {
-    setIsClient(true)
-  }, [])
 
   // Update line count when content changes
   useEffect(() => {
@@ -182,96 +172,63 @@ export default function Editor({ content, onChange, showLineNumbers = false, fon
     }
   }, [])
 
-  // Если мы не на клиенте, показываем заглушку
-  if (!isClient) {
-    return (
-      <div className="flex items-center justify-center h-full bg-[#1E1F22] text-gray-300">
-        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-[#2E436E]"></div>
-      </div>
-    )
-  }
-
   return (
-    <div ref={editorRef} className="h-full w-full bg-[#1E1F22] flex flex-col relative">
-      {/* Toolbar */}
-      <div className="flex items-center justify-end bg-[#1B1C1F] px-2 py-1 border-b border-gray-700">
-        <button
-          className={`p-1 rounded ${isPreviewMode ? "bg-[#2E436E] text-white" : "hover:bg-gray-600 text-gray-400"}`}
-          onClick={() => setIsPreviewMode(true)}
-          title="Предварительный просмотр"
+    <div ref={editorRef} className="h-full w-full bg-[#1E1F22] flex relative">
+      {showLineNumbers && (
+        <div
+          id="line-numbers"
+          className="py-4 pr-2 pl-2 text-right bg-[#1E1F22] text-gray-500 select-none font-mono overflow-hidden border-r border-gray-700"
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            bottom: 0,
+            width: "30px",
+            zIndex: 10,
+            pointerEvents: "none",
+            fontSize: `${fontSize}px`,
+            lineHeight: "24px",
+          }}
         >
-          <Eye className="h-4 w-4" />
-        </button>
-        <button
-          className={`p-1 rounded ml-1 ${!isPreviewMode ? "bg-[#2E436E] text-white" : "hover:bg-gray-600 text-gray-400"}`}
-          onClick={() => setIsPreviewMode(false)}
-          title="Редактирование"
-        >
-          <Edit2 className="h-4 w-4" />
-        </button>
-      </div>
-
-      {isPreviewMode ? (
-        <FilePreview file={file || { id: "temp", name: "temp.txt", content, parentId: null }} />
-      ) : (
-        <div className="flex-1 relative">
-          {showLineNumbers && (
-            <div
-              id="line-numbers"
-              className="py-4 pr-2 pl-2 text-right bg-[#1E1F22] text-gray-500 select-none font-mono overflow-hidden border-r border-gray-700"
-              style={{
-                position: "absolute",
-                top: 0,
-                left: 0,
-                bottom: 0,
-                width: "30px",
-                zIndex: 10,
-                pointerEvents: "none",
-                fontSize: `${fontSize}px`,
-                lineHeight: "24px",
-              }}
-            >
-              {renderLineNumbers()}
-            </div>
-          )}
-          <div className="flex-1 relative">
-            <pre
-              id="syntax-highlight"
-              className="absolute top-0 left-0 right-0 bottom-0 font-mono whitespace-pre-wrap break-all overflow-auto"
-              style={{
-                paddingLeft: showLineNumbers ? "40px" : "24px",
-                paddingTop: "16px", // Отступ сверху для выравнивания с номерами строк
-                paddingRight: "24px",
-                paddingBottom: "16px",
-                fontSize: `${fontSize}px`,
-                color: "#e6e6e6",
-                margin: 0,
-                border: "none",
-                lineHeight: "24px", // Фиксированная высота строки
-                backgroundColor: "#1E1F22",
-              }}
-              dangerouslySetInnerHTML={{ __html: formatContentWithColors() + " " }}
-            />
-            <textarea
-              ref={textareaRef}
-              value={content}
-              onChange={handleChange}
-              onScroll={handleScroll}
-              className="absolute top-0 left-0 right-0 bottom-0 w-full h-full bg-transparent outline-none resize-none font-mono text-transparent caret-white"
-              style={{
-                paddingLeft: showLineNumbers ? "40px" : "24px",
-                paddingTop: "16px", // Отступ сверху для выравнивания с номерами строк
-                paddingRight: "24px",
-                paddingBottom: "16px",
-                fontSize: `${fontSize}px`,
-                lineHeight: "24px", // Фиксированная высота строки
-                caretColor: "white",
-              }}
-              spellCheck={false}
-            />
-          </div>
+          {renderLineNumbers()}
         </div>
       )}
+      <div className="flex-1 relative">
+        <pre
+          id="syntax-highlight"
+          className="absolute top-0 left-0 right-0 bottom-0 font-mono whitespace-pre-wrap break-all overflow-auto"
+          style={{
+            paddingLeft: showLineNumbers ? "40px" : "24px",
+            paddingTop: "16px", // Отступ сверху для выравнивания с номерами строк
+            paddingRight: "24px",
+            paddingBottom: "16px",
+            fontSize: `${fontSize}px`,
+            color: "#e6e6e6",
+            margin: 0,
+            border: "none",
+            lineHeight: "24px", // Фиксированная высота строки
+            backgroundColor: "#1E1F22",
+          }}
+          dangerouslySetInnerHTML={{ __html: formatContentWithColors() + " " }}
+        />
+        <textarea
+          ref={textareaRef}
+          value={content}
+          onChange={handleChange}
+          onScroll={handleScroll}
+          className="absolute top-0 left-0 right-0 bottom-0 w-full h-full bg-transparent outline-none resize-none font-mono text-transparent caret-white"
+          style={{
+            paddingLeft: showLineNumbers ? "40px" : "24px",
+            paddingTop: "16px", // Отступ сверху для выравнивания с номерами строк
+            paddingRight: "24px",
+            paddingBottom: "16px",
+            fontSize: `${fontSize}px`,
+            lineHeight: "24px", // Фиксированная высота строки
+            caretColor: "white",
+          }}
+          spellCheck={false}
+        />
+      </div>
     </div>
   )
 }
