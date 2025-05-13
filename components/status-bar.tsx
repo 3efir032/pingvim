@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { fileSystemAPI } from "@/lib/api-service"
-import { Database, Wifi, WifiOff } from "lucide-react"
+import { Database } from "lucide-react"
 
 export default function StatusBar() {
   const [dbStatus, setDbStatus] = useState<{ connected: boolean; message: string }>({
@@ -46,20 +46,13 @@ export default function StatusBar() {
 
       <div className="flex items-center space-x-4">
         <div className="flex items-center space-x-1">
-          <Database className="h-3 w-3" />
-          {isLoading ? (
-            <span className="animate-pulse">Checking...</span>
-          ) : dbStatus.connected ? (
-            <span className="flex items-center text-green-500">
-              <Wifi className="h-3 w-3 mr-1" />
-              Connected
-            </span>
-          ) : (
-            <span className="flex items-center text-red-500">
-              <WifiOff className="h-3 w-3 mr-1" />
-              {dbStatus.message}
-            </span>
-          )}
+          <Database
+            className={`h-3 w-3 ${dbStatus.connected ? "text-green-500" : "text-gray-400"}`}
+            style={{
+              filter: dbStatus.connected ? "drop-shadow(0 0 2px rgb(34 197 94 / 0.8))" : "none",
+              transition: "all 0.3s ease",
+            }}
+          />
         </div>
         <span>Demo</span>
         <span>Version: v3.03</span>
