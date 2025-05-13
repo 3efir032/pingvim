@@ -1,6 +1,8 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import type React from "react"
+
+import { useEffect, useState, useRef } from "react"
 import { fileSystemAPI } from "@/lib/api-service"
 import { Database } from "lucide-react"
 
@@ -10,6 +12,10 @@ export default function StatusBar() {
     message: "Checking connection...",
   })
   const [isLoading, setIsLoading] = useState(true)
+  const [lastUpdateTime, setLastUpdateTime] = useState<Date>(new Date())
+  const [showContextMenu, setShowContextMenu] = useState(false)
+  const [contextMenuPosition, setContextMenuPosition] = useState({ x: 0, y: 0 })
+  const contextMenuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const checkConnection = async () => {
@@ -24,6 +30,7 @@ export default function StatusBar() {
         })
       } finally {
         setIsLoading(false)
+        setLastUpdateTime(new Date())
       }
     }
 
@@ -36,16 +43,35 @@ export default function StatusBar() {
     return () => clearInterval(interval)
   }, [])
 
+  // Close context menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (contextMenuRef.current && !contextMenuRef.current.contains(event.target as Node)) {
+        setShowContextMenu(false)
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside)
+    }
+  }, [])
+
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault()
+    setContextMenuPosition({ x: e.clientX, y: e.clientY })
+    setShowContextMenu(true)
+  }
+
+  // Format the last update time
+  const formatTime = (date: Date) => {
+    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })
+  }
+
   return (
     <div className="flex items-center justify-between bg-[#1B1C1F] px-2 py-1 text-xs text-gray-400">
       <div className="flex items-center space-x-4">
-        <span>UTF-8</span>
-        <span>LF</span>
-        <span>PingVim</span>
-      </div>
-
-      <div className="flex items-center space-x-4">
-        <div className="flex items-center space-x-1">
+        <div className="flex items-center space-x-1 cursor-context-menu" onContextMenu={handleContextMenu}>
           <Database
             className={`h-3 w-3 ${dbStatus.connected ? "text-green-500" : "text-gray-400"}`}
             style={{
@@ -54,9 +80,43 @@ export default function StatusBar() {
             }}
           />
         </div>
+      </div>
+
+      <div className="flex items-center space-x-4">
         <span>Demo</span>
         <span>Version: v3.03</span>
       </div>
+
+      {showContextMenu && (
+        <div
+          ref={contextMenuRef}
+          className="fixed bg-[#1B1C1F] border border-gray-700 rounded shadow-lg p-2 z-50 text-xs"
+          style={{
+            left: `${contextMenuPosition.x}px`,
+            top: `${contextMenuPosition.y}px`,
+            minWidth: "200px",
+          }}
+        >
+          <div className="font-bold mb-1 pb-1 border-b border-gray-700">Database Status</div>
+          <div className="space-y-1">
+            <div className="flex justify-between">
+              <span>Status:</span>
+              <span className={dbStatus.connected ? "text-green-500" : "text-red-500"}>
+                {dbStatus.connected ? "Connected" : "Disconnected"}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span>Message:</span>
+              <span>{dbStatus.message}</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Last checked:</span>
+              <span>{formatTime(lastUpdateTime)}</span>
+            </div>
+            {isLoading && <div className="text-center text-yellow-500 mt-1">Checking connection...</div>}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
