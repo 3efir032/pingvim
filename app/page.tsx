@@ -52,15 +52,27 @@ export default function Home() {
   const [storageType, setStorageType] = useState<"local" | "database">("local")
   const [isLoading, setIsLoading] = useState(false)
 
-  // Проверяем авторизацию при загрузке страницы
+  // Check if we're running on the client
+  const [isClient, setIsClient] = useState(false)
+
+  // Set isClient to true when component mounts (client-side only)
   useEffect(() => {
-    const auth = localStorage.getItem("pycharm-auth")
-    setIsAuthenticated(auth === "true")
-    setAuthChecked(true)
+    setIsClient(true)
   }, [])
+
+  // Проверяем авторизацию при загрузке страницы (client-side only)
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const auth = localStorage.getItem("pycharm-auth")
+      setIsAuthenticated(auth === "true")
+      setAuthChecked(true)
+    }
+  }, [isClient])
 
   // Добавляем обработчик нажатия клавиши Esc для блокировки редактора
   useEffect(() => {
+    if (!isClient) return
+
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape" && isAuthenticated) {
         // Блокируем редактор при нажатии Esc
@@ -73,10 +85,12 @@ export default function Home() {
     return () => {
       document.removeEventListener("keydown", handleKeyDown)
     }
-  }, [isAuthenticated])
+  }, [isAuthenticated, isClient])
 
   // Функция для смены пароля
   const handleChangePassword = () => {
+    if (!isClient) return
+
     // Получаем текущий пароль из localStorage или используем дефолтный
     const currentPassword = localStorage.getItem("pycharm-password") || "111"
 
@@ -226,6 +240,8 @@ export default function Home() {
 
   // Load data from the selected storage
   useEffect(() => {
+    if (!isClient) return
+
     const loadData = async () => {
       setIsLoading(true)
       try {
@@ -240,7 +256,7 @@ export default function Home() {
     }
 
     loadData()
-  }, [])
+  }, [isClient])
 
   // Найдем и заменим функцию initResizer и соответствующий useLayoutEffect
 
@@ -249,6 +265,8 @@ export default function Home() {
 
   // Добавьте этот новый useEffect сразу после объявления всех useRef
   useEffect(() => {
+    if (!isClient) return
+
     // Функция для инициализации обработчика изменения размера
     const setupResizer = () => {
       const sidebar = sidebarRef.current
@@ -324,9 +342,11 @@ export default function Home() {
         clearTimeout(cleanup)
       }
     }
-  }, [sidebarCollapsed, sidebarWidth, collapsedWidth, minWidth, setSidebarWidth])
+  }, [sidebarCollapsed, sidebarWidth, collapsedWidth, minWidth, setSidebarWidth, isClient])
 
   const initSplitResizer = useCallback(() => {
+    if (!isClient) return
+
     const splitResizer = document.getElementById("split-resizer")
     const leftPane = leftPaneRef.current
     const rightPane = rightPaneRef.current
@@ -382,16 +402,16 @@ export default function Home() {
     return () => {
       splitResizer.removeEventListener("mousedown", onMouseDown)
     }
-  }, [splitView, splitRatio, minSplitWidth])
+  }, [splitView, splitRatio, minSplitWidth, isClient])
 
   // Инициализация изменения размера
 
   // Инициализация изменения размера split view
   useLayoutEffect(() => {
-    if (splitView) {
+    if (isClient && splitView) {
       return initSplitResizer()
     }
-  }, [initSplitResizer, splitView])
+  }, [initSplitResizer, splitView, isClient])
 
   // Применяем градиент к боковой панели
 
@@ -726,6 +746,8 @@ export default function Home() {
   }
 
   const exportData = () => {
+    if (!isClient) return
+
     try {
       // Создаем объект с текущими данными и метаданными
       const exportData = {
@@ -762,6 +784,8 @@ export default function Home() {
   }
 
   const importData = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (!isClient) return
+
     try {
       const file = event.target.files?.[0]
       if (!file) return
@@ -1136,6 +1160,18 @@ export default function Home() {
         ) : (
           <div className="text-gray-500 text-sm p-2">No files found</div>
         )}
+      </div>
+    )
+  }
+
+  // If we're on the server or haven't initialized client-side yet, show a loading state
+  if (!isClient) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-[#1B1C1F] text-gray-300">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#2E436E] mx-auto"></div>
+          <p className="mt-4">Loading PingVim...</p>
+        </div>
       </div>
     )
   }

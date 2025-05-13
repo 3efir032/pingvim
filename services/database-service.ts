@@ -13,16 +13,28 @@ export interface DbConfig {
 
 export class DatabaseService {
   private config: DbConfig | null = null
+  private initialized = false
 
   constructor() {
-    // Load config from localStorage if available
-    const savedConfig = localStorage.getItem("pycharm-db-config")
-    if (savedConfig) {
-      try {
-        this.config = JSON.parse(savedConfig)
-      } catch (error) {
-        console.error("Failed to parse database config:", error)
+    // Don't try to access localStorage during construction
+    // We'll initialize later when needed
+  }
+
+  // Initialize config from localStorage (only called client-side)
+  private initialize() {
+    if (this.initialized) return
+
+    if (typeof window !== "undefined") {
+      // Load config from localStorage if available
+      const savedConfig = localStorage.getItem("pycharm-db-config")
+      if (savedConfig) {
+        try {
+          this.config = JSON.parse(savedConfig)
+        } catch (error) {
+          console.error("Failed to parse database config:", error)
+        }
       }
+      this.initialized = true
     }
   }
 
@@ -50,19 +62,25 @@ export class DatabaseService {
   }
 
   saveConfig(config: DbConfig) {
+    this.initialize()
     this.config = config
-    localStorage.setItem("pycharm-db-config", JSON.stringify(config))
+    if (typeof window !== "undefined") {
+      localStorage.setItem("pycharm-db-config", JSON.stringify(config))
+    }
   }
 
   getConfig(): DbConfig | null {
+    this.initialize()
     return this.config
   }
 
   isEnabled(): boolean {
+    this.initialize()
     return !!this.config?.enabled
   }
 
   async getFolders(): Promise<FolderType[]> {
+    this.initialize()
     if (!this.config) {
       throw new Error("Database configuration not set")
     }
@@ -92,6 +110,7 @@ export class DatabaseService {
   }
 
   async getFiles(): Promise<FileType[]> {
+    this.initialize()
     if (!this.config) {
       throw new Error("Database configuration not set")
     }
@@ -121,6 +140,7 @@ export class DatabaseService {
   }
 
   async saveFolder(folder: FolderType): Promise<string> {
+    this.initialize()
     if (!this.config) {
       throw new Error("Database configuration not set")
     }
@@ -153,6 +173,7 @@ export class DatabaseService {
   }
 
   async saveFile(file: FileType): Promise<string> {
+    this.initialize()
     if (!this.config) {
       throw new Error("Database configuration not set")
     }
@@ -185,6 +206,7 @@ export class DatabaseService {
   }
 
   async deleteFolder(id: string): Promise<void> {
+    this.initialize()
     if (!this.config) {
       throw new Error("Database configuration not set")
     }
@@ -215,6 +237,7 @@ export class DatabaseService {
   }
 
   async deleteFile(id: string): Promise<void> {
+    this.initialize()
     if (!this.config) {
       throw new Error("Database configuration not set")
     }

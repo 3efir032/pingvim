@@ -12,22 +12,38 @@ export interface FileSystem {
 
 export class StorageManager {
   private storageType: StorageType = "local"
+  private initialized = false
 
   constructor() {
-    // Load preferred storage type from localStorage
-    const savedType = localStorage.getItem("pycharm-storage-type")
-    if (savedType === "database" || savedType === "local") {
-      this.storageType = savedType
+    // Don't try to access localStorage during construction
+    // We'll initialize later when needed
+  }
+
+  // Initialize from localStorage (only called client-side)
+  private initialize() {
+    if (this.initialized) return
+
+    if (typeof window !== "undefined") {
+      // Load preferred storage type from localStorage
+      const savedType = localStorage.getItem("pycharm-storage-type")
+      if (savedType === "database" || savedType === "local") {
+        this.storageType = savedType
+      }
+      this.initialized = true
     }
   }
 
   getStorageType(): StorageType {
+    this.initialize()
     return this.storageType
   }
 
   setStorageType(type: StorageType): void {
+    this.initialize()
     this.storageType = type
-    localStorage.setItem("pycharm-storage-type", type)
+    if (typeof window !== "undefined") {
+      localStorage.setItem("pycharm-storage-type", type)
+    }
   }
 
   isDatabaseAvailable(): boolean {
@@ -35,6 +51,7 @@ export class StorageManager {
   }
 
   async loadData(): Promise<FileSystem> {
+    this.initialize()
     if (this.storageType === "database" && this.isDatabaseAvailable()) {
       try {
         const folders = await dbService.getFolders()
@@ -51,6 +68,14 @@ export class StorageManager {
   }
 
   private loadFromLocalStorage(): FileSystem {
+    if (typeof window === "undefined") {
+      // Return default empty structure when running on server
+      return {
+        folders: [{ id: "1", name: "Notes", isOpen: true, parentId: null }],
+        files: [],
+      }
+    }
+
     try {
       const data = localStorage.getItem("pycharm-file-system")
       if (data) {
@@ -68,8 +93,11 @@ export class StorageManager {
   }
 
   async saveData(data: FileSystem): Promise<void> {
+    this.initialize()
     // Always save to local storage as a backup
-    localStorage.setItem("pycharm-file-system", JSON.stringify(data))
+    if (typeof window !== "undefined") {
+      localStorage.setItem("pycharm-file-system", JSON.stringify(data))
+    }
 
     // If database is selected and available, save there too
     if (this.storageType === "database" && this.isDatabaseAvailable()) {
@@ -149,7 +177,9 @@ export class StorageManager {
       const files = await dbService.getFiles()
 
       const data: FileSystem = { folders, files }
-      localStorage.setItem("pycharm-file-system", JSON.stringify(data))
+      if (typeof window !== "undefined") {
+        localStorage.setItem("pycharm-file-system", JSON.stringify(data))
+      }
 
       return true
     } catch (error) {
