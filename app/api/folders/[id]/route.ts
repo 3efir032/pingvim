@@ -5,7 +5,7 @@ import { query } from "@/lib/db"
 export async function GET(request: Request, { params }: { params: { id: string } }) {
   try {
     const id = params.id
-    const folders = await query("SELECT * FROM folders WHERE id = ?", [id])
+    const folders = await query("SELECT * FROM pingvim WHERE id = ?", [id])
 
     // @ts-ignore
     if (folders.length === 0) {
@@ -26,7 +26,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
     const id = params.id
     const { name, isOpen, parentId } = await request.json()
 
-    await query("UPDATE folders SET name = ?, is_open = ?, parent_id = ? WHERE id = ?", [
+    await query("UPDATE pingvim SET name = ?, is_open = ?, parent_id = ? WHERE id = ?", [
       name,
       isOpen ? 1 : 0,
       parentId || null,
@@ -49,7 +49,7 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
     await query("DELETE FROM files WHERE parent_id = ?", [id])
 
     // Then delete the folder
-    await query("DELETE FROM folders WHERE id = ?", [id])
+    await query("DELETE FROM pingvim WHERE id = ?", [id])
 
     return NextResponse.json({ message: "Folder deleted successfully" })
   } catch (error) {

@@ -99,4 +99,14 @@ export const fileSystemAPI = {
     const [folders, files] = await Promise.all([foldersAPI.getAll(), filesAPI.getAll()])
     return { folders, files }
   },
+
+  // Check database connection
+  checkConnection: async (): Promise<{ connected: boolean; message: string }> => {
+    try {
+      await fetchAPI("/health")
+      return { connected: true, message: "Connected to database" }
+    } catch (error) {
+      return { connected: false, message: error instanceof Error ? error.message : "Failed to connect to database" }
+    }
+  },
 }
