@@ -33,6 +33,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { storageManager } from "@/services/storage-manager"
 import { dbService } from "@/services/database-service"
 import DatabaseConfig from "@/components/database-config"
+import { safeLocalStorage } from "@/utils/safe-local-storage"
 
 export default function Home() {
   // Состояние авторизации
@@ -63,7 +64,7 @@ export default function Home() {
   // Проверяем авторизацию при загрузке страницы (client-side only)
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const auth = localStorage.getItem("pycharm-auth")
+      const auth = safeLocalStorage.getItem("pycharm-auth")
       setIsAuthenticated(auth === "true")
       setAuthChecked(true)
     }
@@ -76,7 +77,7 @@ export default function Home() {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape" && isAuthenticated) {
         // Блокируем редактор при нажатии Esc
-        localStorage.removeItem("pycharm-auth")
+        safeLocalStorage.removeItem("pycharm-auth")
         setIsAuthenticated(false)
       }
     }
@@ -92,7 +93,7 @@ export default function Home() {
     if (!isClient) return
 
     // Получаем текущий пароль из localStorage или используем дефолтный
-    const currentPassword = localStorage.getItem("pycharm-password") || "111"
+    const currentPassword = safeLocalStorage.getItem("pycharm-password") || "111"
 
     // Проверяем старый пароль
     if (oldPassword !== currentPassword) {
@@ -102,7 +103,7 @@ export default function Home() {
 
     // Если выбрано отключение пароля
     if (disablePassword) {
-      localStorage.removeItem("pycharm-password")
+      safeLocalStorage.removeItem("pycharm-password")
       setPasswordError("")
       setOldPassword("")
       setNewPassword("")
@@ -123,7 +124,7 @@ export default function Home() {
     }
 
     // Сохраняем новый пароль
-    localStorage.setItem("pycharm-password", newPassword)
+    safeLocalStorage.setItem("pycharm-password", newPassword)
     setPasswordError("")
     setOldPassword("")
     setNewPassword("")
@@ -1183,7 +1184,7 @@ export default function Home() {
 
   // Если пользователь не авторизован, показываем страницу авторизации
   if (!isAuthenticated) {
-    const savedPassword = localStorage.getItem("pycharm-password") || "111"
+    const savedPassword = safeLocalStorage.getItem("pycharm-password", "111")
     return <AuthPage onAuth={(success) => setIsAuthenticated(success)} defaultPassword={savedPassword} />
   }
 
@@ -1285,7 +1286,7 @@ export default function Home() {
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() => {
-                  localStorage.removeItem("pycharm-auth")
+                  safeLocalStorage.removeItem("pycharm-auth")
                   setIsAuthenticated(false)
                 }}
                 className="hover:bg-[#2E436E] cursor-pointer focus:bg-[#2E436E] focus:text-gray-300"
@@ -1385,6 +1386,7 @@ export default function Home() {
                     onChange={(newContent) => handleFileContentChange(leftActiveFile, newContent)}
                     showLineNumbers={true}
                     fontSize={fontSize}
+                    file={leftActiveFileObj}
                   />
                 ) : (
                   <div className="flex items-center justify-center h-full text-gray-500 bg-[#1E1F22]">
@@ -1420,6 +1422,7 @@ export default function Home() {
                       onChange={(newContent) => handleFileContentChange(rightActiveFile, newContent)}
                       showLineNumbers={true}
                       fontSize={fontSize}
+                      file={rightActiveFileObj}
                     />
                   ) : (
                     <div className="flex items-center justify-center h-full text-gray-500 bg-[#1E1F22]">
