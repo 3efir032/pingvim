@@ -57,9 +57,33 @@ export default function StatusBar() {
     }
   }, [])
 
+  // Update the handleContextMenu function to check screen boundaries
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault()
-    setContextMenuPosition({ x: e.clientX, y: e.clientY })
+
+    // Get viewport dimensions
+    const viewportHeight = window.innerHeight
+    const viewportWidth = window.innerWidth
+
+    // Estimate menu height (we'll use 150px as a safe value)
+    const estimatedMenuHeight = 150
+
+    // Calculate position
+    let x = e.clientX
+    let y = e.clientY
+
+    // Check if menu would go off the bottom of the screen
+    if (y + estimatedMenuHeight > viewportHeight) {
+      // Position menu above the cursor
+      y = y - estimatedMenuHeight
+    }
+
+    // Check if menu would go off the right of the screen
+    if (x + 200 > viewportWidth) {
+      x = viewportWidth - 210
+    }
+
+    setContextMenuPosition({ x, y })
     setShowContextMenu(true)
   }
 
