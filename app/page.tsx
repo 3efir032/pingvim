@@ -14,24 +14,30 @@ import {
   Plus,
   Trash,
   Edit,
-  ChevronLeft,
-  ChevronRightIcon,
   X,
   Download,
   Upload,
 } from "lucide-react"
 import { useLocalStorage } from "@/hooks/use-local-storage"
-import Editor from "@/components/editor"
-import StatusBar from "@/components/status-bar"
 import AuthPage from "@/components/auth-page"
 import type { FileType, FolderType } from "@/types/file-system"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { fileSystemAPI, foldersAPI, filesAPI } from "@/lib/api-service"
+// Import the ThemeProvider and useTheme
+import { ThemeProvider, useTheme } from "@/contexts/theme-context"
 
+// Wrap the main content with ThemeProvider
 export default function Home() {
+  return (
+    <ThemeProvider>
+      <HomeContent />
+    </ThemeProvider>
+  )
+}
+
+// Create a separate component for the main content
+function HomeContent() {
+  // Add the useTheme hook
+  const { theme, toggleTheme } = useTheme()
   // Состояние авторизации
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [authChecked, setAuthChecked] = useState(false)
@@ -170,34 +176,17 @@ export default function Home() {
   const isSplitResizingRef = useRef(false)
   const minSplitWidth = 20 // Minimum percentage for each pane
 
-  const [fileSystem, setFileSystem] = useState<{
+  const [fileSystem, setFileSystem] = useLocalStorage<{
     folders: FolderType[]
     files: FileType[]
-  }>({
-    folders: [],
+  }>("pycharm-file-system", {
+    folders: [{ id: "1", name: "Notes", isOpen: true, parentId: null }],
     files: [],
   })
-  const [isLoading, setIsLoading] = useState(true)
 
   // После других useRef
   const toolbarRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
-
-  // Добавьте этот useEffect для инициализации базы данных при загрузке страницы
-  useEffect(() => {
-    const initDb = async () => {
-      if (isAuthenticated) {
-        try {
-          // Вызываем API для проверки здоровья, который также инициализирует базу данных
-          await fileSystemAPI.checkConnection()
-        } catch (error) {
-          console.error("Failed to initialize database:", error)
-        }
-      }
-    }
-
-    initDb()
-  }, [isAuthenticated])
 
   // Enable split view if there are files in the right pane
   useEffect(() => {
@@ -489,28 +478,11 @@ export default function Home() {
     }
   }
 
-  const handleFileContentChange = async (fileId: string, newContent: string) => {
-    try {
-      const file = fileSystem.files.find((f) => f.id === fileId)
-      if (!file) return
-
-      // Debounce the API call to avoid too many requests
-      clearTimeout((window as any).saveTimeout)
-      ;(window as any).saveTimeout = setTimeout(async () => {
-        await filesAPI.update({
-          ...file,
-          content: newContent,
-        })
-      }, 1000)
-
-      // Update local state immediately for responsiveness
-      setFileSystem((prev) => ({
-        ...prev,
-        files: prev.files.map((file) => (file.id === fileId ? { ...file, content: newContent } : file)),
-      }))
-    } catch (error) {
-      console.error("Error updating file content:", error)
-    }
+  const handleFileContentChange = (fileId: string, newContent: string) => {
+    setFileSystem((prev) => ({
+      ...prev,
+      files: prev.files.map((file) => (file.id === fileId ? { ...file, content: newContent } : file)),
+    }))
   }
 
   // File operations
@@ -558,319 +530,208 @@ export default function Home() {
     setDeleteConfirmOpen(true)
   }
 
-  const createNewItem = async () => {
+  const createNewItem = () => {
     if (!newItemName.trim() || !newItemParentId) {
       setNewItemDialogOpen(false)
       return
     }
 
-    try {
-      if (newItemType === "file") {
-        const newFile = await filesAPI.create({
-          name: newItemName,
-          content: "",
-          parentId: newItemParentId,
-        })
-
-        setFileSystem((prev) => ({
-          ...prev,
-          files: [...prev.files, newFile],
-        }))
-      } else {
-        const newFolder = await foldersAPI.create({
-          name: newItemName,
-          isOpen: false,
-          parentId: newItemParentId,
-        })
-
-        setFileSystem((prev) => ({
-          ...prev,
-          folders: [...prev.folders, newFolder],
-        }))
+    if (newItemType === "file") {
+      const newFile = {
+        id: Date.now().toString(),
+        name: newItemName,
+        content: "",
+        parentId: newItemParentId,
       }
 
-      setNewItemDialogOpen(false)
-    } catch (error) {
-      console.error(`Error creating ${newItemType}:`, error)
-      alert(`Failed to create ${newItemType}. Please try again.`)
+      setFileSystem((prev) => ({
+        ...prev,
+        files: [...prev.files, newFile],
+      }))
+    } else {
+      const newFolder = {
+        id: Date.now().toString(),
+        name: newItemName,
+        isOpen: false,
+        parentId: newItemParentId,
+      }
+
+      setFileSystem((prev) => ({
+        ...prev,
+        folders: [...prev.folders, newFolder],
+      }))
     }
+
+    setNewItemDialogOpen(false)
   }
 
-  const renameItem = async () => {
+  const renameItem = () => {
     if (!itemToRename || !newName.trim()) {
       setRenameDialogOpen(false)
       return
     }
 
-    try {
-      if (itemToRename.type === "file") {
-        const fileToUpdate = fileSystem.files.find((file) => file.id === itemToRename.id)
-        if (!fileToUpdate) return
-
-        const updatedFile = await filesAPI.update({
-          ...fileToUpdate,
-          name: newName,
-        })
-
-        setFileSystem((prev) => ({
-          ...prev,
-          files: prev.files.map((file) => (file.id === itemToRename.id ? updatedFile : file)),
-        }))
-      } else {
-        const folderToUpdate = fileSystem.folders.find((folder) => folder.id === itemToRename.id)
-        if (!folderToUpdate) return
-
-        const updatedFolder = await foldersAPI.update({
-          ...folderToUpdate,
-          name: newName,
-        })
-
-        setFileSystem((prev) => ({
-          ...prev,
-          folders: prev.folders.map((folder) => (folder.id === itemToRename.id ? updatedFolder : folder)),
-        }))
-      }
-
-      setRenameDialogOpen(false)
-      setItemToRename(null)
-    } catch (error) {
-      console.error(`Error renaming ${itemToRename.type}:`, error)
-      alert(`Failed to rename ${itemToRename.type}. Please try again.`)
+    if (itemToRename.type === "file") {
+      setFileSystem((prev) => ({
+        ...prev,
+        files: prev.files.map((file) => (file.id === itemToRename.id ? { ...file, name: newName } : file)),
+      }))
+    } else {
+      setFileSystem((prev) => ({
+        ...prev,
+        folders: prev.folders.map((folder) => (folder.id === itemToRename.id ? { ...folder, name: newName } : folder)),
+      }))
     }
+
+    setRenameDialogOpen(false)
+    setItemToRename(null)
   }
 
-  const deleteItem = async () => {
+  const deleteItem = () => {
     if (!itemToDelete) {
       setDeleteConfirmOpen(false)
       return
     }
 
-    try {
-      if (itemToDelete.type === "file") {
-        // Close the file if it's open in either pane
-        if (leftPaneFiles.includes(itemToDelete.id)) {
-          handleCloseFile("left", itemToDelete.id)
-        }
-        if (rightPaneFiles.includes(itemToDelete.id)) {
-          handleCloseFile("right", itemToDelete.id)
-        }
-
-        await filesAPI.delete(itemToDelete.id)
-
-        setFileSystem((prev) => ({
-          ...prev,
-          files: prev.files.filter((file) => file.id !== itemToDelete.id),
-        }))
-      } else {
-        // Get all child folders and files to close them if they're open
-        const foldersToDelete = [itemToDelete.id]
-        const filesToDelete: string[] = []
-
-        // Find all subfolders
-        const checkFolders = [itemToDelete.id]
-        while (checkFolders.length > 0) {
-          const currentFolderId = checkFolders.shift()!
-          const childFolders = fileSystem.folders.filter((f) => f.parentId === currentFolderId)
-
-          childFolders.forEach((folder) => {
-            foldersToDelete.push(folder.id)
-            checkFolders.push(folder.id)
-          })
-
-          // Find all files in this folder
-          const childFiles = fileSystem.files.filter((f) => f.parentId === currentFolderId)
-          filesToDelete.push(...childFiles.map((f) => f.id))
-        }
-
-        // Close any open files that are being deleted
-        filesToDelete.forEach((fileId) => {
-          if (leftPaneFiles.includes(fileId)) {
-            handleCloseFile("left", fileId)
-          }
-          if (rightPaneFiles.includes(fileId)) {
-            handleCloseFile("right", fileId)
-          }
-        })
-
-        // Delete the folder (the API will handle cascading deletes)
-        await foldersAPI.delete(itemToDelete.id)
-
-        // Update the local state
-        setFileSystem((prev) => ({
-          folders: prev.folders.filter((folder) => !foldersToDelete.includes(folder.id)),
-          files: prev.files.filter((file) => !filesToDelete.includes(file.id)),
-        }))
+    if (itemToDelete.type === "file") {
+      // Close the file if it's open in either pane
+      if (leftPaneFiles.includes(itemToDelete.id)) {
+        handleCloseFile("left", itemToDelete.id)
       }
-
-      setDeleteConfirmOpen(false)
-      setItemToDelete(null)
-    } catch (error) {
-      console.error(`Error deleting ${itemToDelete.type}:`, error)
-      alert(`Failed to delete ${itemToDelete.type}. Please try again.`)
-    }
-  }
-
-  const toggleFolderOpen = async (folderId: string) => {
-    try {
-      const folder = fileSystem.folders.find((f) => f.id === folderId)
-      if (!folder) return
-
-      const updatedFolder = await foldersAPI.update({
-        ...folder,
-        isOpen: !folder.isOpen,
-      })
+      if (rightPaneFiles.includes(itemToDelete.id)) {
+        handleCloseFile("right", itemToDelete.id)
+      }
 
       setFileSystem((prev) => ({
         ...prev,
-        folders: prev.folders.map((f) => (f.id === folderId ? updatedFolder : f)),
+        files: prev.files.filter((file) => file.id !== itemToDelete.id),
       }))
-    } catch (error) {
-      console.error("Error toggling folder:", error)
+    } else {
+      // Delete folder and all its contents recursively
+      const foldersToDelete = [itemToDelete.id]
+      const filesToDelete: string[] = []
+
+      // Find all subfolders
+      const checkFolders = [itemToDelete.id]
+      while (checkFolders.length > 0) {
+        const currentFolderId = checkFolders.shift()!
+        const childFolders = fileSystem.folders.filter((f) => f.parentId === currentFolderId)
+
+        childFolders.forEach((folder) => {
+          foldersToDelete.push(folder.id)
+          checkFolders.push(folder.id)
+        })
+
+        // Find all files in this folder
+        const childFiles = fileSystem.files.filter((f) => f.parentId === currentFolderId)
+        filesToDelete.push(...childFiles.map((f) => f.id))
+      }
+
+      // Close any open files that are being deleted
+      filesToDelete.forEach((fileId) => {
+        if (leftPaneFiles.includes(fileId)) {
+          handleCloseFile("left", fileId)
+        }
+        if (rightPaneFiles.includes(fileId)) {
+          handleCloseFile("right", fileId)
+        }
+      })
+
+      setFileSystem((prev) => ({
+        folders: prev.folders.filter((folder) => !foldersToDelete.includes(folder.id)),
+        files: prev.files.filter((file) => !filesToDelete.includes(file.id)),
+      }))
     }
+
+    setDeleteConfirmOpen(false)
+    setItemToDelete(null)
   }
 
-  const exportData = async () => {
-    try {
-      // Get the latest data from the API
-      const data = await fileSystemAPI.loadFileSystem()
+  const toggleFolderOpen = (folderId: string) => {
+    setFileSystem((prev) => ({
+      ...prev,
+      folders: prev.folders.map((folder) => (folder.id === folderId ? { ...folder, isOpen: !folder.isOpen } : folder)),
+    }))
+  }
 
-      // Create an object with the data and metadata
+  const exportData = () => {
+    try {
+      // Создаем объект с текущими данными и метаданными
       const exportData = {
         version: "1.0",
         timestamp: new Date().toISOString(),
-        data,
+        data: fileSystem,
       }
 
-      // Convert to JSON and download
+      // Преобразуем данные в JSON-строку
       const jsonString = JSON.stringify(exportData, null, 2)
+
+      // Создаем Blob с данными
       const blob = new Blob([jsonString], { type: "application/json" })
+
+      // Создаем URL для скачивания
       const url = URL.createObjectURL(blob)
+
+      // Создаем временную ссылку для скачивания
       const link = document.createElement("a")
       link.href = url
       link.download = `pingvim-data-${new Date().toISOString().slice(0, 10)}.json`
+
+      // Добавляем ссылку в DOM, кликаем по ней и удаляем
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
+
+      // Освобождаем URL
       URL.revokeObjectURL(url)
     } catch (error) {
-      console.error("Error exporting data:", error)
-      alert("An error occurred while exporting data")
+      console.error("Ошибка при экспорте данных:", error)
+      alert("Произошла ошибка при экспорте данных")
     }
   }
 
-  const importData = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const importData = (event: React.ChangeEvent<HTMLInputElement>) => {
     try {
       const file = event.target.files?.[0]
       if (!file) return
 
       const reader = new FileReader()
 
-      reader.onload = async (e) => {
+      reader.onload = (e) => {
         try {
           const content = e.target?.result as string
           const importedData = JSON.parse(content)
 
+          // Проверяем структуру данных
           if (importedData.data && Array.isArray(importedData.data.folders) && Array.isArray(importedData.data.files)) {
-            // First, clear existing data (except the root folder)
-            const existingFolders = fileSystem.folders.filter((f) => f.id !== "1")
-            const existingFiles = fileSystem.files
+            // Обновляем состояние fileSystem
+            setFileSystem(importedData.data)
 
-            // Delete all existing files
-            for (const file of existingFiles) {
-              await filesAPI.delete(file.id)
-            }
-
-            // Delete all existing folders except root
-            for (const folder of existingFolders) {
-              await foldersAPI.delete(folder.id)
-            }
-
-            // Import folders first (starting with those that have parent_id = 1 or null)
-            const rootFolders = importedData.data.folders.filter(
-              (f: FolderType) => f.id === "1" || f.parentId === "1" || f.parentId === null,
-            )
-
-            // Then import other folders
-            const otherFolders = importedData.data.folders.filter(
-              (f: FolderType) => f.id !== "1" && f.parentId !== "1" && f.parentId !== null,
-            )
-
-            // Import root folders
-            for (const folder of rootFolders) {
-              if (folder.id !== "1") {
-                // Skip the root folder as it already exists
-                await foldersAPI.create({
-                  name: folder.name,
-                  isOpen: folder.isOpen,
-                  parentId: folder.parentId,
-                })
-              }
-            }
-
-            // Import other folders
-            for (const folder of otherFolders) {
-              await foldersAPI.create({
-                name: folder.name,
-                isOpen: folder.isOpen,
-                parentId: folder.parentId,
-              })
-            }
-
-            // Import files
-            for (const file of importedData.data.files) {
-              await filesAPI.create({
-                name: file.name,
-                content: file.content,
-                parentId: file.parentId,
-              })
-            }
-
-            // Reload the file system
-            const updatedData = await fileSystemAPI.loadFileSystem()
-            setFileSystem(updatedData)
-
-            // Reset open files
+            // Сбрасываем открытые файлы, так как их ID могут не совпадать
             setLeftPaneFiles([])
             setRightPaneFiles([])
             setLeftActiveFile(null)
             setRightActiveFile(null)
 
-            alert("Data imported successfully")
+            alert("Данные успешно импортированы")
           } else {
-            throw new Error("Invalid data format")
+            throw new Error("Неверный формат данных")
           }
         } catch (parseError) {
-          console.error("Error parsing import file:", parseError)
-          alert("Failed to parse the import file. Please ensure it's a valid PingVim export.")
+          console.error("Ошибка при парсинге файла:", parseError)
+          alert("Не удалось прочитать файл. Убедитесь, что это корректный JSON-файл с данными PingVim")
         }
       }
 
       reader.readAsText(file)
+
+      // Сбрасываем значение input, чтобы можно было загрузить тот же файл повторно
       event.target.value = ""
     } catch (error) {
-      console.error("Error importing data:", error)
-      alert("An error occurred while importing data")
+      console.error("Ошибка при импорте данных:", error)
+      alert("Произошла ошибка при импорте данных")
     }
   }
-
-  // Load file system data from the API
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        setIsLoading(true)
-        const data = await fileSystemAPI.loadFileSystem()
-        setFileSystem(data)
-      } catch (error) {
-        console.error("Error loading file system:", error)
-      } finally {
-        setIsLoading(false)
-      }
-    }
-
-    if (isAuthenticated) {
-      loadData()
-    }
-  }, [isAuthenticated])
 
   // Toggle settings menu
   const toggleSettingsMenu = () => {
@@ -1219,22 +1080,10 @@ export default function Home() {
     return <AuthPage onAuth={(success) => setIsAuthenticated(success)} defaultPassword={savedPassword} />
   }
 
-  // If data is loading, show a loading indicator
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-screen bg-[#1B1C1F] text-gray-300">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-[#2E436E] mx-auto mb-4"></div>
-          <p>Loading your files...</p>
-        </div>
-      </div>
-    )
-  }
-
   return (
-    <div className="flex flex-col h-screen bg-[#2b2b2b] text-gray-300 overflow-hidden">
+    <div className={`flex flex-col h-screen ${theme === 'dark' ? 'bg-[#2b2b2b] text-gray-300' : 'bg-gray-100 text-gray-800'} overflow-hidden`}>
       {/* Top toolbar */}
-      <div ref={toolbarRef} className="flex items-center text-sm h-10 bg-[#1B1C1F]">
+      <div ref={toolbarRef} className={`flex items-center text-sm h-10 ${theme === 'dark' ? 'bg-[#1B1C1F]' : 'bg-white border-b border-gray-300'}`}>
         <div className="flex items-center">
           <div className="flex items-center px-2 py-1">
             <div
@@ -1300,8 +1149,8 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="flex items-center px-1.5 py-1 hover:bg-[#2E436E] cursor-pointer">
-            <span className="font-medium text-white">PingVim</span>
+          <div className={`flex items-center px-1.5 py-1 hover:bg-[#2E436E] cursor-pointer ${theme === 'light' ? 'text-black' : 'text-white'}`}>
+            <span className="font-medium">PingVim</span>
           </div>
         </div>
 
@@ -1313,10 +1162,10 @@ export default function Home() {
                 <User className="h-4 w-4" />
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="bg-[#1B1C1F] border-gray-700 text-gray-300">
+            <DropdownMenuContent align="end" className={`${theme === 'dark' ? 'bg-[#1B1C1F] border-gray-700 text-gray-300' : 'bg-white border-gray-300 text-gray-800'}`}>
               <DropdownMenuItem
                 onClick={() => setChangePasswordOpen(true)}
-                className="hover:bg-[#2E436E] cursor-pointer focus:bg-[#2E436E] focus:text-gray-300"
+                className={`hover:bg-[#2E436E] cursor-pointer focus:bg-[#2E436E] focus:text-gray-300 ${theme === 'light' ? 'text-gray-800' : 'text-gray-300'}`}
               >
                 Сменить пароль
               </DropdownMenuItem>
@@ -1325,7 +1174,7 @@ export default function Home() {
                   localStorage.removeItem("pycharm-auth")
                   setIsAuthenticated(false)
                 }}
-                className="hover:bg-[#2E436E] cursor-pointer focus:bg-[#2E436E] focus:text-gray-300"
+                className={`hover:bg-[#2E436E] cursor-pointer focus:bg-[#2E436E] focus:text-gray-300 ${theme === 'light' ? 'text-gray-800' : 'text-gray-300'}`}
               >
                 Заблокировать редактор
               </DropdownMenuItem>
@@ -1345,7 +1194,7 @@ export default function Home() {
         {/* Left sidebar - Project explorer */}
         <div
           ref={sidebarRef}
-          className={`flex flex-col ease-in-out bg-[#1B1C1F]`}
+          className={`flex flex-col ease-in-out ${theme === 'dark' ? 'bg-[#1B1C1F]' : 'bg-white border-r border-gray-300'}`}
           style={{
             width: sidebarCollapsed ? `${collapsedWidth}px` : `${sidebarWidth}px`,
             minWidth: sidebarCollapsed ? `${collapsedWidth}px` : `${minWidth}px`,
@@ -1357,326 +1206,4 @@ export default function Home() {
               <input
                 type="text"
                 placeholder="Search files..."
-                className="bg-[#1E1F22] text-sm border-none outline-none focus:ring-0 w-full h-6 px-2 text-gray-300 rounded-md shadow-[0_2px_4px_rgba(0,0,0,0.15)] focus:shadow-[0_0_8px_rgba(46,67,110,0.3)] transition-shadow duration-200"
-                value={searchTerm}
-                onChange={(e) => {
-                  const term = e.target.value
-                  setSearchTerm(term)
-
-                  if (term.trim() === "") {
-                    setSearchResults([])
-                  } else {
-                    // Поиск файлов по имени
-                    const results = fileSystem.files.filter((file) =>
-                      file.name.toLowerCase().includes(term.toLowerCase()),
-                    )
-                    setSearchResults(results)
-                  }
-                }}
-              />
-            </div>
-            <div className={`flex items-center ${sidebarCollapsed ? "w-full justify-center" : "space-x-1"}`}>
-              <button
-                className="p-1 hover:bg-gray-600 rounded"
-                onClick={toggleSidebar}
-                title={sidebarCollapsed ? "Развернуть панель" : "Свернуть панель"}
-              >
-                {sidebarCollapsed ? <ChevronRightIcon className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-              </button>
-            </div>
-          </div>
-
-          <div className={`flex-1 overflow-auto bg-transparent ${sidebarCollapsed ? "hidden" : ""}`}>
-            {searchTerm.trim() !== "" ? renderSearchResults() : renderFileExplorer()}
-          </div>
-        </div>
-
-        {/* Добавить элемент для изменения размера */}
-        <div
-          id="sidebar-resizer"
-          className="cursor-col-resize hover:bg-gray-500 active:bg-gray-400 z-10"
-          style={{
-            position: "relative",
-            width: "6px",
-            margin: "0 -3px",
-            background: "#1E1F22",
-            opacity: sidebarCollapsed ? 0 : 0.8,
-            pointerEvents: sidebarCollapsed ? "none" : "auto",
-          }}
-        />
-
-        {/* Main content area */}
-        <div ref={contentAreaRef} className="flex-1 flex flex-col">
-          {/* Split view container */}
-          <div className="flex flex-1 overflow-hidden">
-            {/* Left pane */}
-            <div ref={leftPaneRef} className="flex flex-col" style={{ width: splitView ? `${splitRatio}%` : "100%" }}>
-              {/* Left pane tabs */}
-              {renderFileTabs("left")}
-
-              {/* Left pane editor */}
-              <div className="flex-1 overflow-auto">
-                {leftActiveFileObj ? (
-                  <Editor
-                    content={leftActiveFileObj.content}
-                    onChange={(newContent) => handleFileContentChange(leftActiveFile, newContent)}
-                    showLineNumbers={true}
-                    fontSize={fontSize}
-                  />
-                ) : (
-                  <div className="flex items-center justify-center h-full text-gray-500 bg-[#1E1F22]">
-                    <p>Select a file to edit</p>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Split resizer (only shown in split view) */}
-            {splitView && (
-              <div
-                id="split-resizer"
-                className="w-[3px] cursor-col-resize hover:bg-gray-500 active:bg-gray-400 z-10"
-                style={{
-                  background: "#1E1F22",
-                  opacity: 0.8,
-                }}
-              />
-            )}
-
-            {/* Right pane (only shown in split view) */}
-            {splitView && (
-              <div ref={rightPaneRef} className="flex flex-col" style={{ width: `${100 - splitRatio}%` }}>
-                {/* Right pane tabs */}
-                {renderFileTabs("right")}
-
-                {/* Right pane editor */}
-                <div className="flex-1 overflow-auto">
-                  {rightActiveFileObj ? (
-                    <Editor
-                      content={rightActiveFileObj.content}
-                      onChange={(newContent) => handleFileContentChange(rightActiveFile, newContent)}
-                      showLineNumbers={true}
-                      fontSize={fontSize}
-                    />
-                  ) : (
-                    <div className="flex items-center justify-center h-full text-gray-500 bg-[#1E1F22]">
-                      <p>Select a file to edit</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Status bar */}
-      <StatusBar />
-
-      {/* Settings Menu */}
-      {settingsOpen && (
-        <div
-          className="fixed z-50 bg-[#1B1C1F] border border-gray-700 p-3 rounded-md w-64"
-          style={{
-            top: settingsButtonRef.current ? settingsButtonRef.current.getBoundingClientRect().bottom + 5 : 0,
-            right: settingsButtonRef.current
-              ? window.innerWidth - settingsButtonRef.current.getBoundingClientRect().right
-              : 0,
-            fontSize: "13px",
-            boxShadow: "0 0 10px rgba(0, 0, 0, 0.5), 0 5px 15px rgba(0, 0, 0, 0.3)",
-          }}
-        >
-          <div className="space-y-3">
-            <div className="space-y-1">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">Font Size: {fontSize}px</span>
-              </div>
-              <div className="mt-2">
-                <input
-                  type="range"
-                  min="8"
-                  max="30"
-                  value={fontSize}
-                  onChange={(e) => setFontSize(Number.parseInt(e.target.value))}
-                  className="w-full h-2 bg-[#2b2b2b] rounded-lg appearance-none cursor-pointer"
-                  style={{
-                    accentColor: "#2E436E",
-                  }}
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Change Password Dialog */}
-      <Dialog open={changePasswordOpen} onOpenChange={setChangePasswordOpen}>
-        <DialogContent className="bg-[#1B1C1F] border-gray-700 text-gray-300 p-0">
-          <DialogHeader className="p-4 border-b border-gray-700">
-            <DialogTitle>Сменить пароль</DialogTitle>
-          </DialogHeader>
-          <div className="p-4 space-y-4">
-            <div>
-              <label className="text-sm text-gray-400 mb-1 block">Текущий пароль</label>
-              <Input
-                type="password"
-                value={oldPassword}
-                onChange={(e) => setOldPassword(e.target.value)}
-                placeholder="Введите текущий пароль"
-                autoFocus
-                className="bg-[#2b2b2b] border-gray-700 text-gray-300"
-              />
-            </div>
-            <div className={disablePassword ? "opacity-50" : ""}>
-              <label className="text-sm text-gray-400 mb-1 block">Новый пароль</label>
-              <Input
-                type="password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="Введите новый пароль"
-                disabled={disablePassword}
-                className="bg-[#2b2b2b] border-gray-700 text-gray-300"
-              />
-            </div>
-            <div className={disablePassword ? "opacity-50" : ""}>
-              <label className="text-sm text-gray-400 mb-1 block">Подтвердите пароль</label>
-              <Input
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="Повторите новый пароль"
-                disabled={disablePassword}
-                className="bg-[#2b2b2b] border-gray-700 text-gray-300"
-              />
-            </div>
-            <div className="flex items-center space-x-2">
-              <input
-                type="checkbox"
-                id="disable-password"
-                checked={disablePassword}
-                onChange={(e) => {
-                  setDisablePassword(e.target.checked)
-                  if (e.target.checked) {
-                    setNewPassword("")
-                    setConfirmPassword("")
-                  }
-                }}
-                className="rounded bg-[#2b2b2b] border-gray-700 text-[#2E436E] focus:ring-[#2E436E]"
-              />
-              <label htmlFor="disable-password" className="text-sm text-gray-300">
-                Отключить защиту паролем
-              </label>
-            </div>
-            {passwordError && <p className="text-red-500 text-sm">{passwordError}</p>}
-          </div>
-          <DialogFooter className="p-4 border-t border-gray-700 bg-[#1B1C1F]">
-            <Button
-              variant="outline"
-              onClick={() => {
-                setChangePasswordOpen(false)
-                setOldPassword("")
-                setNewPassword("")
-                setConfirmPassword("")
-                setPasswordError("")
-                setDisablePassword(false)
-              }}
-              className="bg-[#4b4b4b] text-gray-300 border-gray-700 hover:bg-[#5a5a5a]"
-            >
-              Отмена
-            </Button>
-            <Button onClick={handleChangePassword} className="bg-[#2E436E] text-white hover:bg-[#3A5488]">
-              {disablePassword ? "Отключить пароль" : "Сохранить"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* New Item Dialog */}
-      <Dialog open={newItemDialogOpen} onOpenChange={setNewItemDialogOpen}>
-        <DialogContent className="bg-[#1B1C1F] border-gray-700 text-gray-300 p-0">
-          <DialogHeader className="p-4 border-b border-gray-700">
-            <DialogTitle>New {newItemType === "file" ? "File" : "Folder"}</DialogTitle>
-          </DialogHeader>
-          <div className="p-4">
-            <Input
-              value={newItemName}
-              onChange={(e) => setNewItemName(e.target.value)}
-              placeholder={`Enter ${newItemType} name`}
-              autoFocus
-              className="bg-[#2b2b2b] border-gray-700 text-gray-300"
-            />
-          </div>
-          <DialogFooter className="p-4 border-t border-gray-700 bg-[#1B1C1F]">
-            <Button
-              variant="outline"
-              onClick={() => setNewItemDialogOpen(false)}
-              className="bg-[#4b4b4b] text-gray-300 border-gray-700 hover:bg-[#5a5a5a]"
-            >
-              Cancel
-            </Button>
-            <Button onClick={createNewItem} className="bg-[#2E436E] text-white hover:bg-[#3A5488]">
-              Create
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Rename Dialog */}
-      <Dialog open={renameDialogOpen} onOpenChange={setRenameDialogOpen}>
-        <DialogContent className="bg-[#1B1C1F] border-gray-700 text-gray-300 p-0">
-          <DialogHeader className="p-4 border-b border-gray-700">
-            <DialogTitle>Rename {itemToRename?.type === "file" ? "File" : "Folder"}</DialogTitle>
-          </DialogHeader>
-          <div className="p-4">
-            <Input
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              placeholder="Enter new name"
-              autoFocus
-              className="bg-[#2b2b2b] border-gray-700 text-gray-300"
-            />
-          </div>
-          <DialogFooter className="p-4 border-t border-gray-700 bg-[#1B1C1F]">
-            <Button
-              variant="outline"
-              onClick={() => setRenameDialogOpen(false)}
-              className="bg-[#4b4b4b] text-gray-300 border-gray-700 hover:bg-[#5a5a5a]"
-            >
-              Cancel
-            </Button>
-            <Button onClick={renameItem} className="bg-[#2E436E] text-white hover:bg-[#3A5488]">
-              Rename
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Delete Confirmation Dialog */}
-      <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
-        <DialogContent className="bg-[#1B1C1F] border-gray-700 text-gray-300 p-0">
-          <DialogHeader className="p-4 border-b border-gray-700">
-            <DialogTitle>Confirm Delete</DialogTitle>
-          </DialogHeader>
-          <div className="p-4">
-            <p>Are you sure you want to delete this {itemToDelete?.type}?</p>
-            {itemToDelete?.type === "folder" && (
-              <p className="text-red-400 mt-2">Warning: This will delete all files and folders inside.</p>
-            )}
-          </div>
-          <DialogFooter className="p-4 border-t border-gray-700 bg-[#1B1C1F]">
-            <Button
-              variant="outline"
-              onClick={() => setDeleteConfirmOpen(false)}
-              className="bg-[#4b4b4b] text-gray-300 border-gray-700 hover:bg-[#5a5a5a]"
-            >
-              Cancel
-            </Button>
-            <Button onClick={deleteItem} className="bg-[#ff5370] text-white hover:bg-[#ff3860]">
-              Delete
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
-  )
-}
+\

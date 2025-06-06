@@ -4,8 +4,9 @@ import type React from "react"
 
 import { useState, useEffect } from "react"
 import { Input } from "@/components/ui/input"
-import { Lock } from "lucide-react"
+import { Lock, Sun, Moon } from "lucide-react"
 import SimplePixelAnimation from "./simple-pixel-animation"
+import { useTheme } from "@/contexts/theme-context"
 
 interface AuthPageProps {
   onAuth: (success: boolean) => void
@@ -13,14 +14,18 @@ interface AuthPageProps {
 }
 
 export default function AuthPage({ onAuth, defaultPassword }: AuthPageProps) {
+  const { theme, toggleTheme } = useTheme()
   const [password, setPassword] = useState("")
   const [error, setError] = useState(false)
   // Add a new state variable to track password field visibility
   const [passwordVisible, setPasswordVisible] = useState(false)
 
-  // Обновляем обработчик нажатия клавиш, чтобы символы попадали в поле ввода пароля
+  const bgColor = theme === "dark" ? "#1B1C1F" : "#F5F5F5"
+  const textColor = theme === "dark" ? "#E0E0E0" : "#333333"
+  const inputBgColor = theme === "dark" ? "#1E1F22" : "#FFFFFF"
+  const inputBorderColor = theme === "dark" ? "#3E3E3E" : "#E0E0E0"
 
-  // Заменяем существующий useEffect на следующий:
+  // Обновляем обработчик нажатия клавиш, чтобы символы попадали в поле ввода пароля
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Показываем поле пароля при нажатии любой клавиши
@@ -75,8 +80,20 @@ export default function AuthPage({ onAuth, defaultPassword }: AuthPageProps) {
   }
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-[#1B1C1F] text-gray-300 relative overflow-hidden">
+    <div
+      className="flex flex-col items-center justify-center min-h-screen relative overflow-hidden"
+      style={{ backgroundColor: bgColor, color: textColor }}
+    >
       <SimplePixelAnimation />
+      <div className="absolute top-4 right-4 z-20">
+        <button
+          onClick={toggleTheme}
+          className="p-2 rounded-full hover:bg-opacity-20 hover:bg-gray-500 transition-colors"
+          style={{ color: textColor }}
+        >
+          {theme === "dark" ? <Sun size={20} /> : <Moon size={20} />}
+        </button>
+      </div>
       <div className="w-72 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-10">
         <form className="m-0 p-0" onSubmit={handleSubmit}>
           <div className="relative w-full m-0 p-0 group">
@@ -85,7 +102,7 @@ export default function AuthPage({ onAuth, defaultPassword }: AuthPageProps) {
                 passwordVisible || error ? "opacity-70" : "opacity-0 group-hover:opacity-70"
               } transition-opacity duration-300`}
             >
-              <Lock className="w-5 h-5 text-gray-400" />
+              <Lock className="w-5 h-5" style={{ color: theme === "dark" ? "#9E9E9E" : "#757575" }} />
             </div>
             <Input
               type="password"
@@ -104,9 +121,14 @@ export default function AuthPage({ onAuth, defaultPassword }: AuthPageProps) {
                   }
                 }
               }}
-              className={`w-full pl-10 bg-[#1E1F22] border-gray-700 ${
+              className={`w-full pl-10 ${
                 passwordVisible || error ? "opacity-70" : "opacity-0 hover:opacity-70"
               } transition-opacity duration-300 ${error ? "border-red-500" : ""}`}
+              style={{
+                backgroundColor: inputBgColor,
+                borderColor: error ? "#f44336" : inputBorderColor,
+                color: textColor,
+              }}
               autoFocus={passwordVisible}
             />
           </div>
