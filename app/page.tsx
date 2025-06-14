@@ -20,9 +20,10 @@ import {
 } from "lucide-react"
 import { useLocalStorage } from "@/hooks/use-local-storage"
 import AuthPage from "@/components/auth-page"
+import Editor from "@/components/editor"
+import StatusBar from "@/components/status-bar"
 import type { FileType, FolderType } from "@/types/file-system"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-// Import the ThemeProvider and useTheme
 import { ThemeProvider, useTheme } from "@/contexts/theme-context"
 
 // Wrap the main content with ThemeProvider
@@ -36,13 +37,13 @@ export default function Home() {
 
 // Create a separate component for the main content
 function HomeContent() {
-  // Add the useTheme hook
   const { theme, toggleTheme } = useTheme()
-  // Состояние авторизации
+
+  // Authentication state
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [authChecked, setAuthChecked] = useState(false)
 
-  // Состояние для диалога смены пароля
+  // Password change dialog state
   const [changePasswordOpen, setChangePasswordOpen] = useState(false)
   const [newPassword, setNewPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
@@ -50,18 +51,17 @@ function HomeContent() {
   const [oldPassword, setOldPassword] = useState("")
   const [disablePassword, setDisablePassword] = useState(false)
 
-  // Проверяем авторизацию при загрузке страницы
+  // Check authentication on page load
   useEffect(() => {
     const auth = localStorage.getItem("pycharm-auth")
     setIsAuthenticated(auth === "true")
     setAuthChecked(true)
   }, [])
 
-  // Добавляем обработчик нажатия клавиши Esc для блокировки редактора
+  // Add Esc key handler to lock editor
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape" && isAuthenticated) {
-        // Блокируем редактор при нажатии Esc
         localStorage.removeItem("pycharm-auth")
         setIsAuthenticated(false)
       }
@@ -73,18 +73,15 @@ function HomeContent() {
     }
   }, [isAuthenticated])
 
-  // Функция для смены пароля
+  // Password change handler
   const handleChangePassword = () => {
-    // Получаем текущий пароль из localStorage или используем дефолтный
     const currentPassword = localStorage.getItem("pycharm-password") || "111"
 
-    // Проверяем старый пароль
     if (oldPassword !== currentPassword) {
       setPasswordError("Неверный текущий пароль")
       return
     }
 
-    // Если выбрано отключение пароля
     if (disablePassword) {
       localStorage.removeItem("pycharm-password")
       setPasswordError("")
@@ -106,7 +103,6 @@ function HomeContent() {
       return
     }
 
-    // Сохраняем новый пароль
     localStorage.setItem("pycharm-password", newPassword)
     setPasswordError("")
     setOldPassword("")
@@ -116,26 +112,18 @@ function HomeContent() {
     setChangePasswordOpen(false)
   }
 
-  // Track open files for left pane
+  // File management state
   const [leftPaneFiles, setLeftPaneFiles] = useLocalStorage<string[]>("pycharm-left-pane-files", [])
-  // Track open files for right pane
   const [rightPaneFiles, setRightPaneFiles] = useLocalStorage<string[]>("pycharm-right-pane-files", [])
-  // Track the currently active file in left pane
   const [leftActiveFile, setLeftActiveFile] = useLocalStorage<string | null>("pycharm-left-active-file", null)
-  // Track the currently active file in right pane
   const [rightActiveFile, setRightActiveFile] = useLocalStorage<string | null>("pycharm-right-active-file", null)
-  // Track if we're in split view mode
   const [splitView, setSplitView] = useLocalStorage<boolean>("pycharm-split-view", false)
-  // Track which tab is being dragged
   const [draggedTab, setDraggedTab] = useState<{ pane: "left" | "right"; fileId: string } | null>(null)
-  // Track editor settings
   const [fontSize, setFontSize] = useLocalStorage<number>("pycharm-font-size", 14)
-  // Track settings menu open state
   const [settingsOpen, setSettingsOpen] = useState(false)
-  // Reference to the settings button
   const settingsButtonRef = useRef<HTMLButtonElement>(null)
 
-  // Track search state
+  // Search state
   const [searchTerm, setSearchTerm] = useState("")
   const [searchResults, setSearchResults] = useState<FileType[]>([])
 
@@ -159,23 +147,25 @@ function HomeContent() {
     type: "file" | "folder"
   } | null>(null)
 
+  // Sidebar state
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const [sidebarWidth, setSidebarWidth] = useState(256) // 256px = 64 * 4 (w-64)
+  const [sidebarWidth, setSidebarWidth] = useState(256)
   const sidebarWidthRef = useRef(256)
   const sidebarRef = useRef<HTMLDivElement>(null)
   const isResizingRef = useRef(false)
   const minWidth = 200
   const collapsedWidth = 50
 
-  // Split view resizing
-  const [splitRatio, setSplitRatio] = useLocalStorage<number>("pycharm-split-ratio", 50) // 50% for left pane
+  // Split view state
+  const [splitRatio, setSplitRatio] = useLocalStorage<number>("pycharm-split-ratio", 50)
   const splitRatioRef = useRef(50)
   const leftPaneRef = useRef<HTMLDivElement>(null)
   const rightPaneRef = useRef<HTMLDivElement>(null)
   const contentAreaRef = useRef<HTMLDivElement>(null)
   const isSplitResizingRef = useRef(false)
-  const minSplitWidth = 20 // Minimum percentage for each pane
+  const minSplitWidth = 20
 
+  // File system state
   const [fileSystem, setFileSystem] = useLocalStorage<{
     folders: FolderType[]
     files: FileType[]
@@ -184,7 +174,6 @@ function HomeContent() {
     files: [],
   })
 
-  // После других useRef
   const toolbarRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -195,19 +184,13 @@ function HomeContent() {
     }
   }, [rightPaneFiles, splitView, setSplitView])
 
-  // Отслеживаем изменения в leftPaneFiles
+  // Handle left pane files changes
   useEffect(() => {
-    // Если в левой панели нет файлов, но есть файлы в правой панели и включен режим split view
     if (leftPaneFiles.length === 0 && rightPaneFiles.length > 0 && splitView) {
-      // Перемещаем файлы из правой панели в левую
       setLeftPaneFiles([...rightPaneFiles])
       setLeftActiveFile(rightActiveFile)
-
-      // Очищаем правую панель
       setRightPaneFiles([])
       setRightActiveFile(null)
-
-      // Отключаем режим split view
       setSplitView(false)
     }
   }, [
@@ -222,20 +205,13 @@ function HomeContent() {
     setSplitView,
   ])
 
-  // Найдем и заменим функцию initResizer и соответствующий useLayoutEffect
-
-  // Заменим функцию initResizer на следующую:
-  // Удалите существующую функцию initResizer и useEffect, связанный с ней
-
-  // Добавьте этот новый useEffect сразу после объявления всех useRef
+  // Sidebar resizer setup
   useEffect(() => {
-    // Функция для инициализации обработчика изменения размера
     const setupResizer = () => {
       const sidebar = sidebarRef.current
       const resizer = document.getElementById("sidebar-resizer")
 
       if (!sidebar || !resizer) {
-        // Если элементы еще не доступны, пробуем снова через небольшую задержку
         return setTimeout(setupResizer, 100)
       }
 
@@ -275,13 +251,9 @@ function HomeContent() {
         document.removeEventListener("mouseup", handleMouseUp)
       }
 
-      // Очищаем предыдущие обработчики, если они есть
       resizer.removeEventListener("mousedown", handleMouseDown)
-
-      // Добавляем новый обработчик
       resizer.addEventListener("mousedown", handleMouseDown)
 
-      // Возвращаем функцию очистки
       return () => {
         resizer.removeEventListener("mousedown", handleMouseDown)
         document.removeEventListener("mousemove", handleMouseMove)
@@ -289,10 +261,8 @@ function HomeContent() {
       }
     }
 
-    // Запускаем настройку обработчика
     const cleanup = setupResizer()
 
-    // Обновляем ширину сайдбара в DOM напрямую при изменении состояния
     if (sidebarRef.current) {
       sidebarRef.current.style.width = sidebarCollapsed ? `${collapsedWidth}px` : `${sidebarWidth}px`
     }
@@ -306,6 +276,7 @@ function HomeContent() {
     }
   }, [sidebarCollapsed, sidebarWidth, collapsedWidth, minWidth, setSidebarWidth])
 
+  // Split resizer initialization
   const initSplitResizer = useCallback(() => {
     const splitResizer = document.getElementById("split-resizer")
     const leftPane = leftPaneRef.current
@@ -319,7 +290,6 @@ function HomeContent() {
       isSplitResizingRef.current = true
       document.body.classList.add("select-none")
 
-      // Запоминаем начальную позицию курсора и размеры контейнера
       const startX = e.clientX
       const containerWidth = contentArea.getBoundingClientRect().width
       const startRatio = splitRatio
@@ -327,32 +297,26 @@ function HomeContent() {
       const onMouseMove = (e: MouseEvent) => {
         if (!isSplitResizingRef.current) return
 
-        // Рассчитываем новое соотношение на основе смещения курсора
         const deltaX = e.clientX - startX
         const deltaRatio = (deltaX / containerWidth) * 100
         const newRatio = Math.min(Math.max(startRatio + deltaRatio, minSplitWidth), 100 - minSplitWidth)
 
-        // Напрямую обновляем DOM без использования React состояния
         leftPane.style.width = `${newRatio}%`
         rightPane.style.width = `${100 - newRatio}%`
         splitRatioRef.current = newRatio
 
-        // Предотвращаем выделение текста во время перетаскивания
         e.preventDefault()
       }
 
       const onMouseUp = () => {
         isSplitResizingRef.current = false
         document.body.classList.remove("select-none")
-
-        // Обновляем React состояние только после завершения перетаскивания
         setSplitRatio(splitRatioRef.current)
 
         document.removeEventListener("mousemove", onMouseMove)
         document.removeEventListener("mouseup", onMouseUp)
       }
 
-      // Используем { passive: false } для предотвращения задержек в обработке событий
       document.addEventListener("mousemove", onMouseMove, { passive: false })
       document.addEventListener("mouseup", onMouseUp)
     }
@@ -364,28 +328,24 @@ function HomeContent() {
     }
   }, [splitView, splitRatio, minSplitWidth])
 
-  // Инициализация изменения размера
-
-  // Инициализация изменения размера split view
+  // Initialize split resizer
   useLayoutEffect(() => {
     if (splitView) {
       return initSplitResizer()
     }
   }, [initSplitResizer, splitView])
 
-  // Применяем градиент к боковой панели
-
+  // Sidebar toggle
   const toggleSidebar = () => {
     setSidebarCollapsed(!sidebarCollapsed)
   }
 
+  // File operations
   const handleFileClick = (fileId: string) => {
     const file = fileSystem.files.find((f) => f.id === fileId)
     if (!file) return
 
-    // If split view is active, decide which pane to open the file in
     if (splitView) {
-      // If the file is already open in either pane, make it active
       if (leftPaneFiles.includes(fileId)) {
         setLeftActiveFile(fileId)
         return
@@ -395,18 +355,15 @@ function HomeContent() {
         return
       }
 
-      // If right pane has no active file, open there
       if (!rightActiveFile) {
         setRightPaneFiles((prev) => [...prev, fileId])
         setRightActiveFile(fileId)
         return
       }
 
-      // Otherwise open in left pane
       setLeftPaneFiles((prev) => [...prev, fileId])
       setLeftActiveFile(fileId)
     } else {
-      // Not in split view, just open in left pane
       if (!leftPaneFiles.includes(fileId)) {
         setLeftPaneFiles((prev) => [...prev, fileId])
       }
@@ -415,30 +372,24 @@ function HomeContent() {
   }
 
   const handleSplitView = (fileId: string) => {
-    // Enable split view if not already enabled
     if (!splitView) {
       setSplitView(true)
     }
 
-    // If the file is already open in the right pane, just make it active
     if (rightPaneFiles.includes(fileId)) {
       setRightActiveFile(fileId)
       return
     }
 
-    // If the file is open in the left pane, move it to the right pane
     if (leftPaneFiles.includes(fileId)) {
-      // Remove from left pane
       setLeftPaneFiles((prev) => prev.filter((id) => id !== fileId))
 
-      // If this was the active file in left pane, set a new active file
       if (leftActiveFile === fileId) {
         const remainingFiles = leftPaneFiles.filter((id) => id !== fileId)
         setLeftActiveFile(remainingFiles.length > 0 ? remainingFiles[remainingFiles.length - 1] : null)
       }
     }
 
-    // Add to right pane
     setRightPaneFiles((prev) => [...prev, fileId])
     setRightActiveFile(fileId)
   }
@@ -447,31 +398,26 @@ function HomeContent() {
     e?.stopPropagation()
 
     if (pane === "left") {
-      // Удаляем файл из левой панели
       setLeftPaneFiles((prev) => {
         const newFiles = prev.filter((id) => id !== fileId)
         return newFiles
       })
 
-      // Если это был активный файл, устанавливаем новый активный файл
       if (leftActiveFile === fileId) {
         const remainingFiles = leftPaneFiles.filter((id) => id !== fileId)
         setLeftActiveFile(remainingFiles.length > 0 ? remainingFiles[remainingFiles.length - 1] : null)
       }
     } else {
-      // Удаляем файл из правой панели
       setRightPaneFiles((prev) => {
         const newFiles = prev.filter((id) => id !== fileId)
         return newFiles
       })
 
-      // Если это был активный файл, устанавливаем новый активный файл
       if (rightActiveFile === fileId) {
         const remainingFiles = rightPaneFiles.filter((id) => id !== fileId)
         setRightActiveFile(remainingFiles.length > 0 ? remainingFiles[remainingFiles.length - 1] : null)
       }
 
-      // Если правая панель теперь пуста, отключаем режим split view
       if (rightPaneFiles.length === 1 && rightPaneFiles[0] === fileId) {
         setSplitView(false)
       }
@@ -485,7 +431,7 @@ function HomeContent() {
     }))
   }
 
-  // File operations
+  // File system operations
   const openNewFileDialog = (parentId: string) => {
     setNewItemType("file")
     setNewItemName("")
@@ -497,7 +443,6 @@ function HomeContent() {
     setNewItemType("folder")
     setNewItemName("")
     setNewItemParentId(parentId)
-    setNewItemDialogOpen(true)
     setNewItemDialogOpen(true)
   }
 
@@ -517,7 +462,6 @@ function HomeContent() {
   }
 
   const openDeleteDialog = (type: "file" | "folder", id: string) => {
-    // Запрещаем удаление корневой папки Notes (id: "1")
     if (type === "folder" && id === "1") {
       alert("Корневую папку нельзя удалить")
       return
@@ -594,7 +538,6 @@ function HomeContent() {
     }
 
     if (itemToDelete.type === "file") {
-      // Close the file if it's open in either pane
       if (leftPaneFiles.includes(itemToDelete.id)) {
         handleCloseFile("left", itemToDelete.id)
       }
@@ -607,11 +550,9 @@ function HomeContent() {
         files: prev.files.filter((file) => file.id !== itemToDelete.id),
       }))
     } else {
-      // Delete folder and all its contents recursively
       const foldersToDelete = [itemToDelete.id]
       const filesToDelete: string[] = []
 
-      // Find all subfolders
       const checkFolders = [itemToDelete.id]
       while (checkFolders.length > 0) {
         const currentFolderId = checkFolders.shift()!
@@ -622,12 +563,10 @@ function HomeContent() {
           checkFolders.push(folder.id)
         })
 
-        // Find all files in this folder
         const childFiles = fileSystem.files.filter((f) => f.parentId === currentFolderId)
         filesToDelete.push(...childFiles.map((f) => f.id))
       }
 
-      // Close any open files that are being deleted
       filesToDelete.forEach((fileId) => {
         if (leftPaneFiles.includes(fileId)) {
           handleCloseFile("left", fileId)
@@ -654,35 +593,27 @@ function HomeContent() {
     }))
   }
 
+  // Export/Import functions
   const exportData = () => {
     try {
-      // Создаем объект с текущими данными и метаданными
       const exportData = {
         version: "1.0",
         timestamp: new Date().toISOString(),
         data: fileSystem,
       }
 
-      // Преобразуем данные в JSON-строку
       const jsonString = JSON.stringify(exportData, null, 2)
-
-      // Создаем Blob с данными
       const blob = new Blob([jsonString], { type: "application/json" })
-
-      // Создаем URL для скачивания
       const url = URL.createObjectURL(blob)
 
-      // Создаем временную ссылку для скачивания
       const link = document.createElement("a")
       link.href = url
       link.download = `pingvim-data-${new Date().toISOString().slice(0, 10)}.json`
 
-      // Добавляем ссылку в DOM, кликаем по ней и удаляем
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
 
-      // Освобождаем URL
       URL.revokeObjectURL(url)
     } catch (error) {
       console.error("Ошибка при экспорте данных:", error)
@@ -702,12 +633,8 @@ function HomeContent() {
           const content = e.target?.result as string
           const importedData = JSON.parse(content)
 
-          // Проверяем структуру данных
           if (importedData.data && Array.isArray(importedData.data.folders) && Array.isArray(importedData.data.files)) {
-            // Обновляем состояние fileSystem
             setFileSystem(importedData.data)
-
-            // Сбрасываем открытые файлы, так как их ID могут не совпадать
             setLeftPaneFiles([])
             setRightPaneFiles([])
             setLeftActiveFile(null)
@@ -724,8 +651,6 @@ function HomeContent() {
       }
 
       reader.readAsText(file)
-
-      // Сбрасываем значение input, чтобы можно было загрузить тот же файл повторно
       event.target.value = ""
     } catch (error) {
       console.error("Ошибка при импорте данных:", error)
@@ -733,10 +658,19 @@ function HomeContent() {
     }
   }
 
-  // Toggle settings menu
-  const toggleSettingsMenu = () => {
-    setSettingsOpen((prev) => !prev)
-  }
+  // Search functionality
+  useEffect(() => {
+    if (searchTerm.trim()) {
+      const results = fileSystem.files.filter(
+        (file) =>
+          file.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          file.content.toLowerCase().includes(searchTerm.toLowerCase()),
+      )
+      setSearchResults(results)
+    } else {
+      setSearchResults([])
+    }
+  }, [searchTerm, fileSystem.files])
 
   // Drag and drop handlers
   const handleDragStart = (pane: "left" | "right", fileId: string) => {
@@ -752,58 +686,46 @@ function HomeContent() {
 
     const { pane: sourcePane, fileId } = draggedTab
 
-    // If dropping on the same pane, do nothing
     if (sourcePane === targetPane) {
       setDraggedTab(null)
       return
     }
 
-    // Move the tab from source pane to target pane
     if (sourcePane === "left" && targetPane === "right") {
-      // Remove from left pane
       setLeftPaneFiles((prev) => prev.filter((id) => id !== fileId))
 
-      // If this was the active file in left pane, set a new active file
       if (leftActiveFile === fileId) {
         const remainingFiles = leftPaneFiles.filter((id) => id !== fileId)
         setLeftActiveFile(remainingFiles.length > 0 ? remainingFiles[remainingFiles.length - 1] : null)
       }
 
-      // Add to right pane if not already there
       if (!rightPaneFiles.includes(fileId)) {
         setRightPaneFiles((prev) => [...prev, fileId])
       }
 
-      // Make it active in right pane
       setRightActiveFile(fileId)
     } else if (sourcePane === "right" && targetPane === "left") {
-      // Remove from right pane
       setRightPaneFiles((prev) => prev.filter((id) => id !== fileId))
 
-      // If this was the active file in right pane, set a new active file
       if (rightActiveFile === fileId) {
         const remainingFiles = rightPaneFiles.filter((id) => id !== fileId)
         setRightActiveFile(remainingFiles.length > 0 ? remainingFiles[remainingFiles.length - 1] : null)
       }
 
-      // Add to left pane if not already there
       if (!leftPaneFiles.includes(fileId)) {
         setLeftPaneFiles((prev) => [...prev, fileId])
       }
-      setLeftPaneFiles((prev) => [...prev, fileId])
-
-      // Make it active in left pane
       setLeftActiveFile(fileId)
     }
 
     setDraggedTab(null)
   }
 
-  // Get file objects for the active files
+  // Get active file objects
   const leftActiveFileObj = leftActiveFile ? fileSystem.files.find((file) => file.id === leftActiveFile) : null
   const rightActiveFileObj = rightActiveFile ? fileSystem.files.find((file) => file.id === rightActiveFile) : null
 
-  // Render file tabs for a specific pane
+  // Render file tabs
   const renderFileTabs = (pane: "left" | "right") => {
     const files = pane === "left" ? leftPaneFiles : rightPaneFiles
     const activeFile = pane === "left" ? leftActiveFile : rightActiveFile
@@ -986,7 +908,6 @@ function HomeContent() {
       )
     }
 
-    // Get root folders (those with parentId === null)
     const rootFolders = fileSystem.folders.filter((folder) => folder.parentId === null)
 
     return (
@@ -1069,21 +990,26 @@ function HomeContent() {
     )
   }
 
-  // Если проверка авторизации еще не выполнена, показываем пустой экран
+  // If auth check is not complete, show nothing
   if (!authChecked) {
     return null
   }
 
-  // Если пользователь не авторизован, показываем страницу авторизации
+  // If not authenticated, show auth page
   if (!isAuthenticated) {
     const savedPassword = localStorage.getItem("pycharm-password") || "111"
     return <AuthPage onAuth={(success) => setIsAuthenticated(success)} defaultPassword={savedPassword} />
   }
 
   return (
-    <div className={`flex flex-col h-screen ${theme === 'dark' ? 'bg-[#2b2b2b] text-gray-300' : 'bg-gray-100 text-gray-800'} overflow-hidden`}>
+    <div
+      className={`flex flex-col h-screen ${theme === "dark" ? "bg-[#2b2b2b] text-gray-300" : "bg-gray-100 text-gray-800"} overflow-hidden`}
+    >
       {/* Top toolbar */}
-      <div ref={toolbarRef} className={`flex items-center text-sm h-10 ${theme === 'dark' ? 'bg-[#1B1C1F]' : 'bg-white border-b border-gray-300'}`}>
+      <div
+        ref={toolbarRef}
+        className={`flex items-center text-sm h-10 ${theme === "dark" ? "bg-[#1B1C1F]" : "bg-white border-b border-gray-300"}`}
+      >
         <div className="flex items-center">
           <div className="flex items-center px-2 py-1">
             <div
@@ -1149,7 +1075,9 @@ function HomeContent() {
             </div>
           </div>
 
-          <div className={`flex items-center px-1.5 py-1 hover:bg-[#2E436E] cursor-pointer ${theme === 'light' ? 'text-black' : 'text-white'}`}>
+          <div
+            className={`flex items-center px-1.5 py-1 hover:bg-[#2E436E] cursor-pointer ${theme === "light" ? "text-black" : "text-white"}`}
+          >
             <span className="font-medium">PingVim</span>
           </div>
         </div>
@@ -1162,10 +1090,13 @@ function HomeContent() {
                 <User className="h-4 w-4" />
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className={`${theme === 'dark' ? 'bg-[#1B1C1F] border-gray-700 text-gray-300' : 'bg-white border-gray-300 text-gray-800'}`}>
+            <DropdownMenuContent
+              align="end"
+              className={`${theme === "dark" ? "bg-[#1B1C1F] border-gray-700 text-gray-300" : "bg-white border-gray-300 text-gray-800"}`}
+            >
               <DropdownMenuItem
                 onClick={() => setChangePasswordOpen(true)}
-                className={`hover:bg-[#2E436E] cursor-pointer focus:bg-[#2E436E] focus:text-gray-300 ${theme === 'light' ? 'text-gray-800' : 'text-gray-300'}`}
+                className={`hover:bg-[#2E436E] cursor-pointer focus:bg-[#2E436E] focus:text-gray-300 ${theme === "light" ? "text-gray-800" : "text-gray-300"}`}
               >
                 Сменить пароль
               </DropdownMenuItem>
@@ -1174,7 +1105,7 @@ function HomeContent() {
                   localStorage.removeItem("pycharm-auth")
                   setIsAuthenticated(false)
                 }}
-                className={`hover:bg-[#2E436E] cursor-pointer focus:bg-[#2E436E] focus:text-gray-300 ${theme === 'light' ? 'text-gray-800' : 'text-gray-300'}`}
+                className={`hover:bg-[#2E436E] cursor-pointer focus:bg-[#2E436E] focus:text-gray-300 ${theme === "light" ? "text-gray-800" : "text-gray-300"}`}
               >
                 Заблокировать редактор
               </DropdownMenuItem>
@@ -1194,7 +1125,7 @@ function HomeContent() {
         {/* Left sidebar - Project explorer */}
         <div
           ref={sidebarRef}
-          className={`flex flex-col ease-in-out ${theme === 'dark' ? 'bg-[#1B1C1F]' : 'bg-white border-r border-gray-300'}`}
+          className={`flex flex-col ease-in-out ${theme === "dark" ? "bg-[#1B1C1F]" : "bg-white border-r border-gray-300"}`}
           style={{
             width: sidebarCollapsed ? `${collapsedWidth}px` : `${sidebarWidth}px`,
             minWidth: sidebarCollapsed ? `${collapsedWidth}px` : `${minWidth}px`,
@@ -1206,4 +1137,310 @@ function HomeContent() {
               <input
                 type="text"
                 placeholder="Search files..."
-\
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className={`flex-1 bg-transparent text-sm outline-none ${theme === "dark" ? "text-gray-300 placeholder-gray-500" : "text-gray-800 placeholder-gray-400"}`}
+              />
+            </div>
+            <button
+              onClick={toggleSidebar}
+              className="p-1 hover:bg-gray-600 rounded flex-shrink-0"
+              title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            >
+              <ChevronRight className={`h-4 w-4 transition-transform ${sidebarCollapsed ? "" : "rotate-180"}`} />
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto">
+            {searchTerm.trim() ? renderSearchResults() : renderFileExplorer()}
+          </div>
+
+          {/* Sidebar resizer */}
+          <div
+            id="sidebar-resizer"
+            className="absolute top-0 right-0 w-1 h-full cursor-col-resize bg-transparent hover:bg-blue-500 transition-colors"
+            style={{ zIndex: 10 }}
+          />
+        </div>
+
+        {/* Main content area */}
+        <div ref={contentAreaRef} className="flex-1 flex flex-col overflow-hidden">
+          {/* File tabs and editor */}
+          <div className="flex-1 flex overflow-hidden">
+            {/* Left pane */}
+            <div
+              ref={leftPaneRef}
+              className="flex flex-col overflow-hidden"
+              style={{ width: splitView ? `${splitRatio}%` : "100%" }}
+            >
+              {leftPaneFiles.length > 0 && renderFileTabs("left")}
+              <div className="flex-1 overflow-hidden">
+                {leftActiveFileObj ? (
+                  <Editor
+                    content={leftActiveFileObj.content}
+                    onChange={(newContent) => handleFileContentChange(leftActiveFileObj.id, newContent)}
+                    showLineNumbers={true}
+                    fontSize={fontSize}
+                  />
+                ) : (
+                  <div
+                    className={`flex items-center justify-center h-full ${theme === "dark" ? "bg-[#1E1F22] text-gray-500" : "bg-white text-gray-400"}`}
+                  >
+                    <div className="text-center">
+                      <File className="h-16 w-16 mx-auto mb-4 opacity-50" />
+                      <p>No file selected</p>
+                      <p className="text-sm mt-2">Open a file from the explorer to start editing</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Split resizer */}
+            {splitView && (
+              <div
+                id="split-resizer"
+                className="w-1 bg-gray-600 cursor-col-resize hover:bg-blue-500 transition-colors flex-shrink-0"
+              />
+            )}
+
+            {/* Right pane */}
+            {splitView && (
+              <div
+                ref={rightPaneRef}
+                className="flex flex-col overflow-hidden"
+                style={{ width: `${100 - splitRatio}%` }}
+              >
+                {rightPaneFiles.length > 0 && renderFileTabs("right")}
+                <div className="flex-1 overflow-hidden">
+                  {rightActiveFileObj ? (
+                    <Editor
+                      content={rightActiveFileObj.content}
+                      onChange={(newContent) => handleFileContentChange(rightActiveFileObj.id, newContent)}
+                      showLineNumbers={true}
+                      fontSize={fontSize}
+                    />
+                  ) : (
+                    <div
+                      className={`flex items-center justify-center h-full ${theme === "dark" ? "bg-[#1E1F22] text-gray-500" : "bg-white text-gray-400"}`}
+                    >
+                      <div className="text-center">
+                        <File className="h-16 w-16 mx-auto mb-4 opacity-50" />
+                        <p>No file selected</p>
+                        <p className="text-sm mt-2">Open a file from the explorer to start editing</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Status bar */}
+      <StatusBar />
+
+      {/* Dialogs */}
+      {newItemDialogOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-[#1B1C1F] border border-gray-700 rounded-lg p-6 w-96">
+            <h3 className="text-lg font-semibold mb-4 text-white">
+              Create New {newItemType === "file" ? "File" : "Folder"}
+            </h3>
+            <input
+              type="text"
+              value={newItemName}
+              onChange={(e) => setNewItemName(e.target.value)}
+              placeholder={`Enter ${newItemType} name`}
+              className="w-full bg-[#2b2b2b] border border-gray-600 rounded px-3 py-2 text-white mb-4"
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  createNewItem()
+                } else if (e.key === "Escape") {
+                  setNewItemDialogOpen(false)
+                }
+              }}
+            />
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => setNewItemDialogOpen(false)}
+                className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+              >
+                Cancel
+              </button>
+              <button onClick={createNewItem} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+                Create
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {renameDialogOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-[#1B1C1F] border border-gray-700 rounded-lg p-6 w-96">
+            <h3 className="text-lg font-semibold mb-4 text-white">
+              Rename {itemToRename?.type === "file" ? "File" : "Folder"}
+            </h3>
+            <input
+              type="text"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              className="w-full bg-[#2b2b2b] border border-gray-600 rounded px-3 py-2 text-white mb-4"
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  renameItem()
+                } else if (e.key === "Escape") {
+                  setRenameDialogOpen(false)
+                }
+              }}
+            />
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => setRenameDialogOpen(false)}
+                className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+              >
+                Cancel
+              </button>
+              <button onClick={renameItem} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+                Rename
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deleteConfirmOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-[#1B1C1F] border border-gray-700 rounded-lg p-6 w-96">
+            <h3 className="text-lg font-semibold mb-4 text-white">Confirm Delete</h3>
+            <p className="text-gray-300 mb-4">
+              Are you sure you want to delete this {itemToDelete?.type}? This action cannot be undone.
+            </p>
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => setDeleteConfirmOpen(false)}
+                className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+              >
+                Cancel
+              </button>
+              <button onClick={deleteItem} className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700">
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {changePasswordOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-[#1B1C1F] border border-gray-700 rounded-lg p-6 w-96">
+            <h3 className="text-lg font-semibold mb-4 text-white">Сменить пароль</h3>
+            {passwordError && <div className="text-red-400 text-sm mb-4">{passwordError}</div>}
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Текущий пароль</label>
+                <input
+                  type="password"
+                  value={oldPassword}
+                  onChange={(e) => setOldPassword(e.target.value)}
+                  className="w-full bg-[#2b2b2b] border border-gray-600 rounded px-3 py-2 text-white"
+                />
+              </div>
+              {!disablePassword && (
+                <>
+                  <div>
+                    <label className="block text-sm text-gray-400 mb-1">Новый пароль</label>
+                    <input
+                      type="password"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      className="w-full bg-[#2b2b2b] border border-gray-600 rounded px-3 py-2 text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm text-gray-400 mb-1">Подтвердить пароль</label>
+                    <input
+                      type="password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      className="w-full bg-[#2b2b2b] border border-gray-600 rounded px-3 py-2 text-white"
+                    />
+                  </div>
+                </>
+              )}
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="disablePassword"
+                  checked={disablePassword}
+                  onChange={(e) => setDisablePassword(e.target.checked)}
+                  className="mr-2"
+                />
+                <label htmlFor="disablePassword" className="text-sm text-gray-400">
+                  Отключить защиту паролем
+                </label>
+              </div>
+            </div>
+            <div className="flex justify-end space-x-3 mt-6">
+              <button
+                onClick={() => setChangePasswordOpen(false)}
+                className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+              >
+                Отмена
+              </button>
+              <button
+                onClick={handleChangePassword}
+                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+              >
+                Сохранить
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {settingsOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-[#1B1C1F] border border-gray-700 rounded-lg p-6 w-96">
+            <h3 className="text-lg font-semibold mb-4 text-white">Settings</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Font Size</label>
+                <input
+                  type="range"
+                  min="10"
+                  max="24"
+                  value={fontSize}
+                  onChange={(e) => setFontSize(Number(e.target.value))}
+                  className="w-full"
+                />
+                <div className="text-sm text-gray-400 mt-1">{fontSize}px</div>
+              </div>
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">Theme</label>
+                <button
+                  onClick={toggleTheme}
+                  className="w-full bg-[#2b2b2b] border border-gray-600 rounded px-3 py-2 text-white text-left"
+                >
+                  {theme === "dark" ? "Dark" : "Light"} Theme
+                </button>
+              </div>
+            </div>
+            <div className="flex justify-end space-x-3 mt-6">
+              <button
+                onClick={() => setSettingsOpen(false)}
+                className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
