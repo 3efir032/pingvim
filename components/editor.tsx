@@ -2,7 +2,6 @@
 
 import type React from "react"
 import { useEffect, useRef, useState } from "react"
-import { useTheme } from "@/contexts/theme-context"
 
 interface EditorProps {
   content: string
@@ -11,13 +10,11 @@ interface EditorProps {
   fontSize?: number
 }
 
-// Update the Editor component signature to include theme
 export default function Editor({ content, onChange, showLineNumbers = false, fontSize = 13 }: EditorProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const editorRef = useRef<HTMLDivElement>(null)
   const cursorPositionRef = useRef<{ start: number; end: number } | null>(null)
   const [lineCount, setLineCount] = useState(1)
-  const { theme } = useTheme()
 
   // Update line count when content changes
   useEffect(() => {
@@ -108,17 +105,14 @@ export default function Editor({ content, onChange, showLineNumbers = false, fon
     return numbers
   }
 
-  // Update the formatContentWithColors function to support both themes
+  // Format content with colors
   const formatContentWithColors = () => {
     if (!content) return ""
 
+    // Разбиваем текст на строки
     const lines = content.split("\n")
     const formattedLines = []
     let inTripleQuotes = false
-
-    // Define theme-specific colors outside the loop
-    const commentColor = theme === "dark" ? "#FFEB3B" : "#8A6D3B"
-    const stringColor = theme === "dark" ? "#4CAF50" : "#2E7D32"
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i]
@@ -138,15 +132,15 @@ export default function Editor({ content, onChange, showLineNumbers = false, fon
         }
 
         // Всегда делаем строку с тройными кавычками зеленой
-        formattedLines.push(`<span style="color: ${stringColor};">${escapeHtml(line)}</span>`)
+        formattedLines.push(`<span style="color: #4CAF50;">${escapeHtml(line)}</span>`)
       }
       // Если строка начинается с #, делаем текст желтым
       else if (line.trim().startsWith("#")) {
-        formattedLines.push(`<span style="color: ${commentColor};">${escapeHtml(line)}</span>`)
+        formattedLines.push(`<span style="color: #FFEB3B;">${escapeHtml(line)}</span>`)
       }
       // Если мы внутри блока с тройными кавычками, делаем текст зеленым
       else if (inTripleQuotes) {
-        formattedLines.push(`<span style="color: ${stringColor};">${escapeHtml(line)}</span>`)
+        formattedLines.push(`<span style="color: #4CAF50;">${escapeHtml(line)}</span>`)
       }
       // Обычный текст
       else {
@@ -178,16 +172,12 @@ export default function Editor({ content, onChange, showLineNumbers = false, fon
     }
   }, [])
 
-  // Update the return statement to use theme-specific colors
   return (
-    <div
-      ref={editorRef}
-      className={`h-full w-full ${theme === "dark" ? "bg-[#1E1F22]" : "bg-[#FFFFFF]"} flex relative`}
-    >
+    <div ref={editorRef} className="h-full w-full bg-[#1E1F22] flex relative">
       {showLineNumbers && (
         <div
           id="line-numbers"
-          className={`py-4 pr-2 pl-2 text-right ${theme === "dark" ? "bg-[#1E1F22] text-gray-500" : "bg-[#F5F5F5] text-gray-400"} select-none font-mono overflow-hidden border-r ${theme === "dark" ? "border-gray-700" : "border-gray-300"}`}
+          className="py-4 pr-2 pl-2 text-right bg-[#1E1F22] text-gray-500 select-none font-mono overflow-hidden border-r border-gray-700"
           style={{
             position: "absolute",
             top: 0,
@@ -213,11 +203,11 @@ export default function Editor({ content, onChange, showLineNumbers = false, fon
             paddingRight: "24px",
             paddingBottom: "16px",
             fontSize: `${fontSize}px`,
-            color: theme === "dark" ? "#e6e6e6" : "#333333",
+            color: "#e6e6e6",
             margin: 0,
             border: "none",
             lineHeight: "24px", // Фиксированная высота строки
-            backgroundColor: theme === "dark" ? "#1E1F22" : "#FFFFFF",
+            backgroundColor: "#1E1F22",
           }}
           dangerouslySetInnerHTML={{ __html: formatContentWithColors() + " " }}
         />
@@ -226,7 +216,7 @@ export default function Editor({ content, onChange, showLineNumbers = false, fon
           value={content}
           onChange={handleChange}
           onScroll={handleScroll}
-          className="absolute top-0 left-0 right-0 bottom-0 w-full h-full bg-transparent outline-none resize-none font-mono text-transparent"
+          className="absolute top-0 left-0 right-0 bottom-0 w-full h-full bg-transparent outline-none resize-none font-mono text-transparent caret-white"
           style={{
             paddingLeft: showLineNumbers ? "40px" : "24px",
             paddingTop: "16px", // Отступ сверху для выравнивания с номерами строк
@@ -234,7 +224,7 @@ export default function Editor({ content, onChange, showLineNumbers = false, fon
             paddingBottom: "16px",
             fontSize: `${fontSize}px`,
             lineHeight: "24px", // Фиксированная высота строки
-            caretColor: theme === "dark" ? "white" : "black",
+            caretColor: "white",
           }}
           spellCheck={false}
         />
